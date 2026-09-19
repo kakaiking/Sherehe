@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: sherehe
+      POSTGRES_USER: sherehe
+      POSTGRES_PASSWORD: local-dev-only
+    ports:
+      - "5433:5432"
+    volumes:
+      - sherehe_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sherehe -d sherehe"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  sherehe_pg:

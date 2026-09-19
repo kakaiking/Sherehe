@@ -1,0 +1,15 @@
+{
+  "name": "sherehe",
+  "private": true,
+  "workspaces": ["server", "client"],
+  "scripts": {
+    "build": "npm run build -w server && npm run build -w client",
+    "lint": "npm run lint -w server && npm run lint -w client",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w client",
+    "test": "npm run test -w server && npm run test -w client",
+    "audit": "npm audit --audit-level=high"
+  },
+  "engines": {
+    "node": "22.x"
+  }
+}
