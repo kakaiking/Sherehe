@@ -4,6 +4,10 @@ All notable changes to Sherehe are documented in this file.
 
 ## Unreleased
 
+### Fixed
+
+- Production catalog boot no longer re-runs `001_init.sql` after it is applied. That re-run created `account_kind` indexes on the old `sessions`/`orders` tables and crashed every `/v1` request (`FUNCTION_INVOCATION_FAILED`). Indexes on `account_kind` in `001` now no-op if the column is missing; a rejected Vercel boot is retried instead of cached; CI replays the frozen pre-portal schema. The client ignores non-JSON error bodies instead of `JSON.parse` throwing.
+
 ### Changed
 
 - Guests, partners, and vendors each have their own table. Google sign-in on a gate creates or reuses that table’s row, so one email can hold a user id, a partner id, and a vendor id at once.

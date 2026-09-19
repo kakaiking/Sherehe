@@ -35,39 +35,66 @@ async function migrationsDir(): Promise<string> {
   throw new Error("missing_migration_sql");
 }
 
+export type MigrationQuery = {
+  query: (sql: string, params?: unknown[]) => Promise<[unknown]>;
+};
+
+export type TrackedMigration = {
+  id: string;
+  sql: string;
+};
+
+/**
+ * Apply numbered SQL files once. Re-running 001 after tables already exist
+ * is not safe: CREATE TABLE IF NOT EXISTS is a no-op, but CREATE INDEX on
+ * columns added in a later file (account_kind) crashes boot.
+ */
+export async function applyTrackedMigrations(
+  pool: MigrationQuery,
+  files: TrackedMigration[],
+): Promise<string[]> {
+  await pool.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+  id VARCHAR(64) PRIMARY KEY,
+  applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+)`);
+  const ran: string[] = [];
+  for (const file of files) {
+    const [appliedRows] = await pool.query(
+      "SELECT id FROM schema_migrations WHERE id = ?",
+      [file.id],
+    );
+    if ((appliedRows as Array<{ id: string }>).length > 0) continue;
+    await pool.query(file.sql);
+    await pool.query("INSERT INTO schema_migrations (id) VALUES (?)", [file.id]);
+    ran.push(file.id);
+  }
+  return ran;
+}
+
+export async function loadTrackedMigrationFiles(): Promise<TrackedMigration[]> {
+  const dir = await migrationsDir();
+  const names = (await readdir(dir))
+    .filter((name) => /^\d+_.*\.sql$/.test(name))
+    .sort();
+  if (!names.includes("001_init.sql")) {
+    throw new Error("missing_migration_sql");
+  }
+  const files: TrackedMigration[] = [];
+  for (const name of names) {
+    files.push({
+      id: name.replace(/\.sql$/, ""),
+      sql: await readFile(path.join(dir, name), "utf8"),
+    });
+  }
+  return files;
+}
+
 export async function migrateAndSeed(): Promise<void> {
   const config = loadConfig();
   const pool = createPool(config);
   try {
-    const dir = await migrationsDir();
-    const files = (await readdir(dir))
-      .filter((name) => /^\d+_.*\.sql$/.test(name))
-      .sort();
-    if (!files.includes("001_init.sql")) {
-      throw new Error("missing_migration_sql");
-    }
-    for (const file of files) {
-      const id = file.replace(/\.sql$/, "");
-      const sql = await readFile(path.join(dir, file), "utf8");
-      if (id === "001_init") {
-        await pool.query(sql);
-        const [appliedInit] = await pool.query(
-          "SELECT id FROM schema_migrations WHERE id = ?",
-          [id],
-        );
-        if ((appliedInit as Array<{ id: string }>).length === 0) {
-          await pool.query("INSERT INTO schema_migrations (id) VALUES (?)", [id]);
-        }
-        continue;
-      }
-      const [appliedRows] = await pool.query(
-        "SELECT id FROM schema_migrations WHERE id = ?",
-        [id],
-      );
-      if ((appliedRows as Array<{ id: string }>).length > 0) continue;
-      await pool.query(sql);
-      await pool.query("INSERT INTO schema_migrations (id) VALUES (?)", [id]);
-    }
+    const files = await loadTrackedMigrationFiles();
+    await applyTrackedMigrations(pool, files);
     const [events] = await pool.query("SELECT id FROM events LIMIT 1");
     if ((events as Array<{ id: string }>).length === 0) {
       await seed(pool, config);

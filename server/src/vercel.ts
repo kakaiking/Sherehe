@@ -7,8 +7,9 @@ import { liveStkClient, mockStkClient } from "./mpesa/client.js";
 import { migrateAndSeed } from "./migrate.js";
 import { createRedis, withMigrateLock } from "./redis.js";
 import { log } from "./log.js";
+import { resolveSingletonBoot, type BootSlot } from "./bootOnce.js";
 
-let boot: Promise<Express> | undefined;
+const boot: BootSlot<Express> = {};
 
 async function startApp(): Promise<Express> {
   const config = loadConfig();
@@ -34,7 +35,6 @@ export default async function vercelHandler(
   req: IncomingMessage,
   res: ServerResponse,
 ): Promise<void> {
-  if (!boot) boot = startApp();
-  const app = await boot;
+  const app = await resolveSingletonBoot(boot, startApp);
   app(req, res);
 }

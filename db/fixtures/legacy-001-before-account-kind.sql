@@ -1,7 +1,7 @@
+-- Frozen copy of 001_init.sql from immediately before 002_portal_accounts.
+-- Used by migrate replay tests. Do not apply in production.
+
 -- Postgres schema (Neon locally via Compose, hosted via Neon).
--- Additive changes for databases that already ran this file belong in 002_*.sql.
--- CREATE TABLE IF NOT EXISTS does not add columns; indexes on new columns must
--- no-op when the column is missing so a mistaken re-run cannot crash boot.
 CREATE TABLE IF NOT EXISTS schema_migrations (
   id VARCHAR(64) PRIMARY KEY,
   applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -16,59 +16,20 @@ CREATE TABLE IF NOT EXISTS users (
   phone VARCHAR(16) NULL,
   password_hash VARCHAR(255) NULL,
   role VARCHAR(16) NOT NULL DEFAULT 'customer'
-    CHECK (role IN ('customer', 'staff')),
+    CHECK (role IN ('customer', 'staff', 'partner', 'vendor')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_users_email UNIQUE (email),
   CONSTRAINT uq_users_phone UNIQUE (phone),
   CONSTRAINT uq_users_google_sub UNIQUE (google_sub)
 );
 
-CREATE TABLE IF NOT EXISTS partners (
-  id CHAR(36) NOT NULL PRIMARY KEY,
-  email VARCHAR(255) NOT NULL,
-  display_name VARCHAR(80) NULL,
-  given_name VARCHAR(40) NULL,
-  google_sub VARCHAR(255) NULL,
-  phone VARCHAR(16) NULL,
-  password_hash VARCHAR(255) NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT uq_partners_email UNIQUE (email),
-  CONSTRAINT uq_partners_phone UNIQUE (phone),
-  CONSTRAINT uq_partners_google_sub UNIQUE (google_sub)
-);
-
-CREATE TABLE IF NOT EXISTS vendors (
-  id CHAR(36) NOT NULL PRIMARY KEY,
-  email VARCHAR(255) NOT NULL,
-  display_name VARCHAR(80) NULL,
-  given_name VARCHAR(40) NULL,
-  google_sub VARCHAR(255) NULL,
-  phone VARCHAR(16) NULL,
-  password_hash VARCHAR(255) NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  CONSTRAINT uq_vendors_email UNIQUE (email),
-  CONSTRAINT uq_vendors_phone UNIQUE (phone),
-  CONSTRAINT uq_vendors_google_sub UNIQUE (google_sub)
-);
-
 CREATE TABLE IF NOT EXISTS sessions (
   id CHAR(64) NOT NULL PRIMARY KEY,
-  account_kind VARCHAR(16) NOT NULL DEFAULT 'user'
-    CHECK (account_kind IN ('user', 'partner', 'vendor')),
-  user_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   expires_at TIMESTAMPTZ NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions (user_id);
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'sessions' AND column_name = 'account_kind'
-  ) THEN
-    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions (account_kind, user_id)';
-  END IF;
-END $$;
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions (expires_at);
 
 CREATE TABLE IF NOT EXISTS events (
@@ -106,9 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_sale_windows_event_code ON sale_windows (event_id
 
 CREATE TABLE IF NOT EXISTS orders (
   id CHAR(36) NOT NULL PRIMARY KEY,
-  account_kind VARCHAR(16) NOT NULL DEFAULT 'user'
-    CHECK (account_kind IN ('user', 'partner', 'vendor')),
-  user_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL REFERENCES users (id),
   event_id CHAR(36) NULL REFERENCES events (id),
   kind VARCHAR(16) NOT NULL CHECK (kind IN ('tickets', 'vendor', 'service', 'product')),
   status VARCHAR(16) NOT NULL DEFAULT 'pending'
@@ -120,15 +79,6 @@ CREATE TABLE IF NOT EXISTS orders (
   stub_downloaded_at TIMESTAMPTZ NULL
 );
 CREATE INDEX IF NOT EXISTS idx_orders_user ON orders (user_id);
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.columns
-    WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'account_kind'
-  ) THEN
-    EXECUTE 'CREATE INDEX IF NOT EXISTS idx_orders_account ON orders (account_kind, user_id)';
-  END IF;
-END $$;
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders (status);
 
 CREATE TABLE IF NOT EXISTS order_items (
@@ -174,7 +124,7 @@ CREATE INDEX IF NOT EXISTS idx_payments_order ON payments (order_id);
 
 CREATE TABLE IF NOT EXISTS partner_applications (
   id CHAR(36) NOT NULL PRIMARY KEY,
-  partner_id CHAR(36) NOT NULL REFERENCES partners (id),
+  user_id CHAR(36) NOT NULL REFERENCES users (id),
   kind VARCHAR(16) NOT NULL CHECK (kind IN ('partner', 'sponsor')),
   member_count INT NOT NULL,
   company_name VARCHAR(200) NOT NULL,
@@ -205,7 +155,7 @@ CREATE TABLE IF NOT EXISTS vendor_packages (
 
 CREATE TABLE IF NOT EXISTS vendor_applications (
   id CHAR(36) NOT NULL PRIMARY KEY,
-  vendor_id CHAR(36) NOT NULL REFERENCES vendors (id),
+  user_id CHAR(36) NOT NULL REFERENCES users (id),
   package_id CHAR(36) NOT NULL REFERENCES vendor_packages (id),
   category VARCHAR(80) NOT NULL,
   company_name VARCHAR(200) NOT NULL,
@@ -228,9 +178,7 @@ CREATE TABLE IF NOT EXISTS service_offerings (
 
 CREATE TABLE IF NOT EXISTS service_bookings (
   id CHAR(36) NOT NULL PRIMARY KEY,
-  account_kind VARCHAR(16) NOT NULL DEFAULT 'user'
-    CHECK (account_kind IN ('user', 'partner', 'vendor')),
-  user_id CHAR(36) NOT NULL,
+  user_id CHAR(36) NOT NULL REFERENCES users (id),
   offering_id CHAR(36) NOT NULL REFERENCES service_offerings (id),
   event_date DATE NOT NULL,
   pax INT NOT NULL,
@@ -248,7 +196,7 @@ CREATE TABLE IF NOT EXISTS products (
   description VARCHAR(2000) NOT NULL,
   price_ksh INT NOT NULL,
   stock INT NOT NULL,
-  owner_id CHAR(36) NULL REFERENCES vendors (id),
+  owner_id CHAR(36) NULL REFERENCES users (id),
   CONSTRAINT uq_product_slug UNIQUE (slug)
 );
 CREATE INDEX IF NOT EXISTS idx_products_owner ON products (owner_id);

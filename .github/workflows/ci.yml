@@ -10,6 +10,22 @@ permissions:
 jobs:
   test:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: sherehe
+          POSTGRES_PASSWORD: local-dev-only
+          POSTGRES_DB: sherehe
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U sherehe -d sherehe"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      MIGRATE_REPLAY_DATABASE_URL: postgres://sherehe:local-dev-only@127.0.0.1:5433/sherehe
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:

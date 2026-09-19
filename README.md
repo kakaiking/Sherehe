@@ -1,6 +1,6 @@
 # Sherehe
 
-Last updated: 2026-09-19 05:58 AM CDT
+Last updated: 2026-09-19 06:15 AM CDT
 
 Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Tickets, partners, vendors, catering bookings, and a small shop.
 
@@ -122,7 +122,18 @@ Production is **https://sherehe-seven.vercel.app**.
 
 5. For live M-Pesa, set `MPESA_MODE=live` and `MPESA_CALLBACK_URL=https://<that-host>/v1/payments/mpesa/callback` plus Daraja credentials.
 
-Schema migrate/seed runs on the first serverless cold start (locked in Upstash). Local MySQL volumes are not used anymore; run `docker compose down` then `docker compose up -d postgres` after this change.
+Schema migrate/seed runs on the first serverless cold start (locked in Upstash). Each numbered SQL file is applied once (`schema_migrations`); mutating `001_init.sql` after a live database already exists is not enough — put additive changes in a new file. CI replays the pre-portal `001` schema against current files (`MIGRATE_REPLAY_DATABASE_URL`). A failed boot promise is not cached, so a migrate error cannot pin-kill the isolate. Local MySQL volumes are not used anymore; run `docker compose down` then `docker compose up -d postgres` after this change.
+
+```mermaid
+flowchart TD
+  cold[Cold start] --> lock[Upstash migrate lock]
+  lock --> applied{schema_migrations has file id?}
+  applied -->|yes| skip[Skip SQL]
+  applied -->|no| run[Run SQL then record id]
+  skip --> seed[Seed if no events]
+  run --> seed
+  seed --> app[Serve /v1 and /health]
+```
 
 <sub>[↑ Back to contents](#contents)</sub>
 
@@ -214,6 +225,7 @@ erDiagram
 ## Troubleshooting
 
 - **`./start.sh` times out:** read `.local/state/sherehe-dev/server.log` and `client.log`. Confirm Docker is running and port **5433** is free for Postgres.
+- **Home says the event listing is unavailable / console `JSON.parse`:** the API returned non-JSON (often Vercel `FUNCTION_INVOCATION_FAILED`). Check `vercel logs`; a failed migrate on cold start takes down `/health` and `/v1/*`. After a schema change, confirm `002_*.sql` (or later) is applied — do not rely on re-running `001_init.sql`.
 - **API 500 on first request:** Postgres is not up or migrate has not run. `docker compose ps` then `npm run migrate -w server`.
 - **CORS or CSRF 403:** Use the Vite origin (`http://localhost:5173`), not the API port, so cookies stay first-party via the proxy.
 - **Live STK never completes:** Daraja must reach `MPESA_CALLBACK_URL` over HTTPS. The pay step also polls STK Query so a delayed callback can still settle. Locally use a tunnel, or keep `MPESA_MODE=mock` until that URL exists.

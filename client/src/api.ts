@@ -6,23 +6,41 @@ export type ApiError = {
 
 let csrf = "";
 
-async function readError(res: Response): Promise<ApiError> {
-  try {
-    const body: unknown = await res.json();
-    if (
-      typeof body === "object" &&
-      body !== null &&
-      "detail" in body &&
-      typeof body.detail === "string"
-    ) {
-      const code =
-        "code" in body && typeof body.code === "string" ? body.code : undefined;
-      const err: ApiError = { status: res.status, detail: body.detail };
-      if (code) err.code = code;
-      return err;
+/** Parse JSON without throwing on HTML/text 500 bodies from the edge. */
+export async function parseJsonBody(res: Response): Promise<unknown> {
+  const body = res as { text?: () => Promise<string>; json?: () => Promise<unknown> };
+  if (typeof body.text === "function") {
+    const text = await body.text();
+    if (!text.trim()) return null;
+    try {
+      return JSON.parse(text) as unknown;
+    } catch {
+      return null;
     }
-  } catch {
-    /* ignore */
+  }
+  if (typeof body.json === "function") {
+    try {
+      return await body.json();
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+async function readError(res: Response): Promise<ApiError> {
+  const body: unknown = await parseJsonBody(res);
+  if (
+    typeof body === "object" &&
+    body !== null &&
+    "detail" in body &&
+    typeof body.detail === "string"
+  ) {
+    const code =
+      "code" in body && typeof body.code === "string" ? body.code : undefined;
+    const err: ApiError = { status: res.status, detail: body.detail };
+    if (code) err.code = code;
+    return err;
   }
   return { status: res.status, detail: "Request failed." };
 }
@@ -30,7 +48,7 @@ async function readError(res: Response): Promise<ApiError> {
 export async function ensureCsrf(): Promise<string> {
   if (csrf) return csrf;
   const res = await fetch("/v1/auth/csrf", { credentials: "include" });
-  const body: unknown = await res.json();
+  const body: unknown = await parseJsonBody(res);
   if (
     typeof body === "object" &&
     body !== null &&
@@ -65,7 +83,11 @@ export async function api<T>(
   if (!res.ok) {
     throw await readError(res);
   }
-  return (await res.json()) as T;
+  const body = await parseJsonBody(res);
+  if (body === null) {
+    throw { status: res.status, detail: "Request failed." } satisfies ApiError;
+  }
+  return body as T;
 }
 
 export async function downloadPdf(
