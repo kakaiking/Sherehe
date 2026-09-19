@@ -1,6 +1,6 @@
 # Sherehe
 
-Last updated: 2026-09-19 03:48 AM CDT
+Last updated: 2026-09-19 05:33 AM CDT
 
 Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Tickets, partners, vendors, catering bookings, and a small shop.
 
@@ -96,6 +96,14 @@ Never commit `.env`. Rotate Daraja keys in your secret manager; one credential s
 
 The hosted app is a Vite static client plus an Express serverless function (`/v1`, `/health`). Neon holds Postgres. Upstash Redis holds sliding-window rate limits and a migrate lock. The Vercel project **sherehe** is already linked under team `kakaiteclimited-3896`. Session, ticket HMAC, Google OAuth, staff email, and `MPESA_MODE=mock` are already in the project env.
 
+To stage everything, commit, push `origin`, and deploy production in one step:
+
+```bash
+./push.sh "feat: short message"
+```
+
+`.env` files are refused if they would be committed. You must already be logged in (`npx vercel login` / `npx vercel whoami`).
+
 Marketplace installs need a human to accept terms (the CLI cannot do that in this session):
 
 1. Neon: open [Accept Neon terms](https://vercel.com/kakaiteclimited-3896/~/integrations/accept-terms/neon?source=cli), then run:
@@ -110,7 +118,7 @@ Marketplace installs need a human to accept terms (the CLI cannot do that in thi
 
 Production is **https://sherehe-seven.vercel.app**.
 
-4. In Google Cloud Console, add authorized JavaScript origin `https://sherehe.vercel.app` (or the URL `vercel ls` shows) and redirect `https://<that-host>/v1/auth/google/callback`.
+4. In Google Cloud Console, add authorized JavaScript origin `https://sherehe-seven.vercel.app` (or the URL `vercel ls` shows) and redirect `https://<that-host>/v1/auth/google/callback`. SPA paths such as `/login` are rewritten to `index.html` in `vercel.json` so the Google handoff is not a Vercel 404.
 
 5. For live M-Pesa, set `MPESA_MODE=live` and `MPESA_CALLBACK_URL=https://<that-host>/v1/payments/mpesa/callback` plus Daraja credentials.
 
@@ -175,7 +183,7 @@ sequenceDiagram
   React->>Express: POST /v1/orders/tickets
 ```
 
-Public routes: `/`, `/tickets`, `/shop`, `/account`, `/orders/:id`, `/login`. Partner/vendor application and services/staff screens remain at `/partners`, `/vendors`, `/services`, `/staff` (not on the dock).
+Public routes: `/`, `/tickets`, `/shop`, `/account`, `/orders/:id`, `/login`. Partner/vendor application and services/staff screens remain at `/partners`, `/vendors`, `/services`, `/staff` (not on the dock). On Vercel those paths are not files — they need the catch-all rewrite to `index.html` after `/v1` and `/health`.
 
 ## Troubleshooting
 
@@ -185,6 +193,7 @@ Public routes: `/`, `/tickets`, `/shop`, `/account`, `/orders/:id`, `/login`. Pa
 - **Live STK never completes:** Daraja must reach `MPESA_CALLBACK_URL` over HTTPS. The pay step also polls STK Query so a delayed callback can still settle. Locally use a tunnel, or keep `MPESA_MODE=mock` until that URL exists.
 - **Flash sale missing:** Staff can arm it only when confirmed attendees are below 200. The public catalog hides flash when the window ends.
 - **Continue with Google fails immediately:** set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, add authorized redirect `http://localhost:5173/v1/auth/google/callback`, then `npm run migrate -w server` if the Google columns are missing.
+- **Google account picker works, then production shows “This page doesn’t exist” on `/login`:** Vercel is resolving `/login` as a missing file. Confirm `vercel.json` ends with a rewrite of `/(.*)` to `/index.html`, then redeploy. Also add the production origin and `https://<host>/v1/auth/google/callback` in Google Cloud Console.
 - **Google account picker works, then the app says sign-in expired:** click **Continue with Google** again from this tab (the PKCE verifier lives in sessionStorage). Do not reuse an old Google tab after a failed attempt.
 - **Google account picker works, then the app says sign-in did not complete:** the API could not reach Google (`google_auth_failed` / `fetch failed` in `.local/state/sherehe-dev/server.log`). Retry; if a VPN is on, pause it or allow `oauth2.googleapis.com` and `www.googleapis.com`.
 

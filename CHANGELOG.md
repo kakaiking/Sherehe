@@ -6,6 +6,7 @@ All notable changes to Sherehe are documented in this file.
 
 ### Added
 
+- `./push.sh "commit message"` stages the tree, commits, pushes `origin`, and deploys Vercel production.
 - Tab icon is a tight beer-pong cup mark drawn to read at 16px (`/favicon.svg`, plus PNG/ICO fallbacks).
 
 ### Changed
@@ -22,6 +23,8 @@ All notable changes to Sherehe are documented in this file.
 - The dock **More** sheet (Partners / Vendors).
 
 ### Fixed
+
+- Production Google sign-in no longer 404s on `/login`: Vercel now serves `index.html` for SPA routes after `/v1` and `/health`.
 
 - The paid-order ticket preview stacks night, studio, locality, then the holder line like the PDF stub, instead of overlapping the compact venue line with the name.
 
