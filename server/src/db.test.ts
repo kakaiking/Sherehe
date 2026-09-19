@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isSelectSql, mysqlToPg } from "./db.js";
+import { isSelectSql, isUniqueViolation, mysqlToPg } from "./db.js";
 
 describe("mysqlToPg", () => {
   it("rewrites positional placeholders in order", () => {
@@ -10,6 +10,15 @@ describe("mysqlToPg", () => {
 
   it("leaves SQL without placeholders unchanged", () => {
     expect(mysqlToPg("SELECT id FROM events LIMIT 1")).toBe("SELECT id FROM events LIMIT 1");
+  });
+});
+
+describe("isUniqueViolation", () => {
+  it("recognizes Postgres and mysql2 duplicate codes", () => {
+    expect(isUniqueViolation({ code: "23505" })).toBe(true);
+    expect(isUniqueViolation({ code: "ER_DUP_ENTRY" })).toBe(true);
+    expect(isUniqueViolation({ code: "23503" })).toBe(false);
+    expect(isUniqueViolation(new Error("dup"))).toBe(false);
   });
 });
 

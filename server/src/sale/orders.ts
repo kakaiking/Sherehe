@@ -14,6 +14,13 @@ import {
 import { signTicketPublicId } from "../tickets/hmac.js";
 import { stubHolderCaption } from "../tickets/holder.js";
 import { log } from "../log.js";
+import type { AccountKind } from "../auth/accounts.js";
+import {
+  ORDER_BUYER_DISPLAY,
+  ORDER_BUYER_EMAIL,
+  ORDER_BUYER_GIVEN,
+  ORDER_BUYER_JOINS,
+} from "../auth/accounts.js";
 
 type TicketTypeRow = RowDataPacket & {
   code: TicketCode;
@@ -160,6 +167,7 @@ export async function createTicketOrder(
   userId: string,
   code: TicketCode,
   qty: number,
+  accountKind: AccountKind = "user",
 ): Promise<{ orderId: string; totalKsh: number; holdExpiresAt: Date }> {
   const conn = await pool.getConnection();
   try {
@@ -180,9 +188,9 @@ export async function createTicketOrder(
     const holdExpiresAt = new Date(now.getTime() + HOLD_MS);
     const total = checked.offering.priceKsh * qty;
     await conn.query(
-      `INSERT INTO orders (id, user_id, event_id, kind, status, total_ksh, hold_expires_at)
-       VALUES (?, ?, ?, 'tickets', 'pending', ?, ?)`,
-      [orderId, userId, eventId, total, holdExpiresAt],
+      `INSERT INTO orders (id, account_kind, user_id, event_id, kind, status, total_ksh, hold_expires_at)
+       VALUES (?, ?, ?, ?, 'tickets', 'pending', ?, ?)`,
+      [orderId, accountKind, userId, eventId, total, holdExpiresAt],
     );
     await conn.query(
       `INSERT INTO order_items (id, order_id, sku_kind, sku_code, title, qty, unit_price_ksh, seats)
@@ -302,15 +310,17 @@ export async function markTicketStubDownloaded(
 export async function userHasDownloadedTicket(
   pool: Pool,
   userId: string,
+  accountKind: AccountKind = "user",
 ): Promise<boolean> {
   const [rows] = await pool.query<RowDataPacket[]>(
     `SELECT id FROM orders
      WHERE user_id = ?
+       AND account_kind = ?
        AND kind = 'tickets'
        AND status = 'paid'
        AND stub_downloaded_at IS NOT NULL
      LIMIT 1`,
-    [userId],
+    [userId, accountKind],
   );
   return rows.length > 0;
 }
@@ -329,10 +339,13 @@ export async function ticketsForOrder(
   }>
 > {
   const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT t.public_id, t.ticket_code, u.display_name, u.given_name, u.email
+    `SELECT t.public_id, t.ticket_code,
+            ${ORDER_BUYER_DISPLAY} AS display_name,
+            ${ORDER_BUYER_GIVEN} AS given_name,
+            ${ORDER_BUYER_EMAIL} AS email
      FROM tickets t
      JOIN orders o ON o.id = t.order_id
-     JOIN users u ON u.id = o.user_id
+     ${ORDER_BUYER_JOINS}
      WHERE t.order_id = ?`,
     [orderId],
   );

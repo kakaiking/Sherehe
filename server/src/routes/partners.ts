@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import type { Pool, RowDataPacket } from "../db.js";
-import { requireUser } from "../auth/session.js";
+import { requirePartner } from "../auth/session.js";
 
 const PartnerBody = z.object({
   kind: z.enum(["partner", "sponsor"]),
@@ -16,7 +16,7 @@ const PartnerBody = z.object({
 export function partnersRouter(pool: Pool): Router {
   const r = Router();
 
-  r.post("/", requireUser, async (req, res, next) => {
+  r.post("/", requirePartner, async (req, res, next) => {
     try {
       const parsed = PartnerBody.safeParse(req.body);
       if (!parsed.success) {
@@ -33,7 +33,7 @@ export function partnersRouter(pool: Pool): Router {
       const id = randomUUID();
       await pool.query(
         `INSERT INTO partner_applications
-         (id, user_id, kind, member_count, company_name, contact_name, website, brand_info, status)
+         (id, partner_id, kind, member_count, company_name, contact_name, website, brand_info, status)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
         [
           id,
@@ -56,12 +56,12 @@ export function partnersRouter(pool: Pool): Router {
     }
   });
 
-  r.get("/mine", requireUser, async (req, res, next) => {
+  r.get("/mine", requirePartner, async (req, res, next) => {
     try {
       const user = req.user;
       if (!user) return;
       const [rows] = await pool.query<RowDataPacket[]>(
-        "SELECT id, kind, member_count, company_name, status, created_at FROM partner_applications WHERE user_id = ? ORDER BY created_at DESC",
+        "SELECT id, kind, member_count, company_name, status, created_at FROM partner_applications WHERE partner_id = ? ORDER BY created_at DESC",
         [user.id],
       );
       res.json({ applications: rows });

@@ -222,7 +222,7 @@ export type GoogleUserRow = {
   email: string;
   google_sub: string | null;
   phone: string | null;
-  role: "customer" | "staff" | "partner" | "vendor";
+  role?: "customer" | "staff" | "partner" | "vendor";
   display_name: string | null;
   given_name: string | null;
 };

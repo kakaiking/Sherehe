@@ -4,6 +4,10 @@ All notable changes to Sherehe are documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Guests, partners, and vendors each have their own table. Google sign-in on a gate creates or reuses that table’s row, so one email can hold a user id, a partner id, and a vendor id at once.
+
 ### Added
 
 - `./push.sh "commit message"` stages the tree, commits, pushes `origin`, and deploys Vercel production.

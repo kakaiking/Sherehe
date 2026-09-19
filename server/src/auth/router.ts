@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { Router } from "express";
 import type { Pool, RowDataPacket } from "../db.js";
+import { isUniqueViolation } from "../db.js";
 import { randomUUID } from "node:crypto";
 import type { Config } from "../config.js";
 import { googleOAuthConfig } from "../config.js";
@@ -22,10 +23,15 @@ import {
 } from "./google-errors.js";
 import {
   parsePortal,
-  portalRole,
-  roleMatchesPortal,
   type UserRole,
 } from "./portal.js";
+import {
+  ACCOUNT_PROFILE_SQL,
+  accountTable,
+  roleForAccountKind,
+  type AccountKind,
+  type AccountTable,
+} from "./accounts.js";
 
 const RegisterBody = z.object({
   email: z.string().email().max(255),
@@ -71,6 +77,24 @@ function publicUser(user: {
     displayName: user.display_name,
     givenName: user.given_name,
   };
+}
+
+function profileSelect(table: AccountTable): string {
+  if (table === "users") {
+    return `SELECT ${ACCOUNT_PROFILE_SQL}, role FROM users`;
+  }
+  return `SELECT ${ACCOUNT_PROFILE_SQL} FROM ${table}`;
+}
+
+function sessionRole(
+  table: AccountTable,
+  row: GoogleUserRow,
+  kind: AccountKind,
+): UserRole {
+  if (table === "users") {
+    return row.role ?? "customer";
+  }
+  return roleForAccountKind(kind);
 }
 
 function googleJsonStatus(code: GoogleLoginError): number {
@@ -166,7 +190,8 @@ export function authRouter(pool: Pool, config: Config): Router {
         return;
       }
       const portal = parsePortal(parsed.data.portal) ?? "user";
-      const intendedRole = portalRole(portal);
+      const table = accountTable(portal);
+      const intendedRole = roleForAccountKind(portal);
       const idToken = await exchangeGoogleCode(
         oauth,
         parsed.data.code,
@@ -175,11 +200,11 @@ export function authRouter(pool: Pool, config: Config): Router {
       );
       const claims = await verifyGoogleIdToken(idToken, oauth.clientId, fetch);
       const [subRows] = await pool.query<RowDataPacket[]>(
-        "SELECT id, email, google_sub, phone, role, display_name, given_name FROM users WHERE google_sub = ?",
+        `${profileSelect(table)} WHERE google_sub = ?`,
         [claims.sub],
       );
       const [emailRows] = await pool.query<RowDataPacket[]>(
-        "SELECT id, email, google_sub, phone, role, display_name, given_name FROM users WHERE email = ?",
+        `${profileSelect(table)} WHERE email = ?`,
         [claims.email],
       );
       const bySub = subRows[0] as GoogleUserRow | undefined;
@@ -191,13 +216,9 @@ export function authRouter(pool: Pool, config: Config): Router {
         return;
       }
       if (plan === "use-sub" && bySub) {
-        if (!roleMatchesPortal(bySub.role, portal)) {
-          fail("google_portal");
-          return;
-        }
         if (claims.displayName) {
           await pool.query(
-            "UPDATE users SET display_name = ?, given_name = ? WHERE id = ?",
+            `UPDATE ${table} SET display_name = ?, given_name = ? WHERE id = ?`,
             [claims.displayName, claims.givenName, bySub.id],
           );
           user = {
@@ -209,12 +230,8 @@ export function authRouter(pool: Pool, config: Config): Router {
           user = bySub;
         }
       } else if (plan === "link-email" && byEmail) {
-        if (!roleMatchesPortal(byEmail.role, portal)) {
-          fail("google_portal");
-          return;
-        }
         await pool.query(
-          "UPDATE users SET google_sub = ?, display_name = COALESCE(?, display_name), given_name = COALESCE(?, given_name) WHERE id = ?",
+          `UPDATE ${table} SET google_sub = ?, display_name = COALESCE(?, display_name), given_name = COALESCE(?, given_name) WHERE id = ?`,
           [claims.sub, claims.displayName, claims.givenName, byEmail.id],
         );
         user = {
@@ -225,11 +242,19 @@ export function authRouter(pool: Pool, config: Config): Router {
         };
       } else {
         const id = randomUUID();
-        await pool.query(
-          `INSERT INTO users (id, email, google_sub, phone, password_hash, role, display_name, given_name)
-           VALUES (?, ?, ?, NULL, NULL, ?, ?, ?)`,
-          [id, claims.email, claims.sub, intendedRole, claims.displayName, claims.givenName],
-        );
+        if (table === "users") {
+          await pool.query(
+            `INSERT INTO users (id, email, google_sub, phone, password_hash, role, display_name, given_name)
+             VALUES (?, ?, ?, NULL, NULL, ?, ?, ?)`,
+            [id, claims.email, claims.sub, intendedRole, claims.displayName, claims.givenName],
+          );
+        } else {
+          await pool.query(
+            `INSERT INTO ${table} (id, email, google_sub, phone, password_hash, display_name, given_name)
+             VALUES (?, ?, ?, NULL, NULL, ?, ?)`,
+            [id, claims.email, claims.sub, claims.displayName, claims.givenName],
+          );
+        }
         user = {
           id,
           email: claims.email,
@@ -240,8 +265,16 @@ export function authRouter(pool: Pool, config: Config): Router {
           given_name: claims.givenName,
         };
       }
-      await createSession(pool, res, config, user.id);
-      res.json(publicUser(user));
+      user = { ...user, role: sessionRole(table, user, portal) };
+      await createSession(pool, res, config, user.id, portal);
+      res.json(publicUser({
+        id: user.id,
+        email: user.email,
+        phone: user.phone,
+        role: user.role ?? intendedRole,
+        display_name: user.display_name,
+        given_name: user.given_name,
+      }));
     } catch (err) {
       const code = googleCallbackErrorCode(err);
       log("warn", "google_auth_failed", {
@@ -288,13 +321,12 @@ export function authRouter(pool: Pool, config: Config): Router {
         return;
       }
       try {
-        await pool.query("UPDATE users SET phone = ? WHERE id = ?", [
-          phone,
-          req.user.id,
-        ]);
+        await pool.query(
+          `UPDATE ${accountTable(req.user.kind)} SET phone = ? WHERE id = ?`,
+          [phone, req.user.id],
+        );
       } catch (err) {
-        const code = (err as { code?: string }).code;
-        if (code === "ER_DUP_ENTRY") {
+        if (isUniqueViolation(err)) {
           res.status(409).json({
             type: "https://httpstatuses.com/409",
             title: "Conflict",
@@ -341,8 +373,7 @@ export function authRouter(pool: Pool, config: Config): Router {
           [id, parsed.data.email.toLowerCase(), phone, passwordHash],
         );
       } catch (err) {
-        const code = (err as { code?: string }).code;
-        if (code === "ER_DUP_ENTRY") {
+        if (isUniqueViolation(err)) {
           res.status(409).json({
             type: "https://httpstatuses.com/409",
             title: "Conflict",
@@ -353,7 +384,7 @@ export function authRouter(pool: Pool, config: Config): Router {
         }
         throw err;
       }
-      await createSession(pool, res, config, id);
+      await createSession(pool, res, config, id, "user");
       res.status(201).json({
         id,
         email: parsed.data.email.toLowerCase(),
@@ -405,7 +436,7 @@ export function authRouter(pool: Pool, config: Config): Router {
         });
         return;
       }
-      await createSession(pool, res, config, user.id);
+      await createSession(pool, res, config, user.id, "user");
       res.json({
         id: user.id,
         email: user.email,

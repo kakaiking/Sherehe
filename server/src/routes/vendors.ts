@@ -4,7 +4,7 @@ import { randomUUID } from "node:crypto";
 import type { Pool, RowDataPacket } from "../db.js";
 import type { Config } from "../config.js";
 import type { StkClient } from "../mpesa/client.js";
-import { requireUser } from "../auth/session.js";
+import { requireVendor } from "../auth/session.js";
 import { fulfillPaidOrder } from "../sale/orders.js";
 import { loadEventId } from "../sale/orders.js";
 import { stkPhone, STK_PHONE_NEEDED } from "../phone.js";
@@ -37,7 +37,7 @@ export function vendorsRouter(
     }
   });
 
-  r.post("/apply", requireUser, async (req, res, next) => {
+  r.post("/apply", requireVendor, async (req, res, next) => {
     try {
       const parsed = VendorBody.safeParse(req.body);
       if (!parsed.success) {
@@ -90,8 +90,8 @@ export function vendorsRouter(
       const orderId = randomUUID();
       const appId = randomUUID();
       await pool.query(
-        `INSERT INTO orders (id, user_id, event_id, kind, status, total_ksh, hold_expires_at)
-         VALUES (?, ?, ?, 'vendor', 'pending', ?, NOW() + INTERVAL '10 minutes')`,
+        `INSERT INTO orders (id, account_kind, user_id, event_id, kind, status, total_ksh, hold_expires_at)
+         VALUES (?, 'vendor', ?, ?, 'vendor', 'pending', ?, NOW() + INTERVAL '10 minutes')`,
         [orderId, user.id, eventId, pkg.fee_ksh],
       );
       await pool.query(
@@ -101,7 +101,7 @@ export function vendorsRouter(
       );
       await pool.query(
         `INSERT INTO vendor_applications
-         (id, user_id, package_id, category, company_name, notes, status, order_id)
+         (id, vendor_id, package_id, category, company_name, notes, status, order_id)
          VALUES (?, ?, ?, ?, ?, ?, 'awaiting_payment', ?)`,
         [
           appId,

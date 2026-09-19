@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { randomUUID } from "node:crypto";
@@ -19,15 +19,15 @@ if (!process.env["VERCEL"]) {
   dotenv.config({ path: path.join(root, ".env") });
 }
 
-async function initSqlPath(): Promise<string> {
+async function migrationsDir(): Promise<string> {
   const candidates = [
-    path.join(process.cwd(), "db/migrations/001_init.sql"),
-    path.join(root, "db/migrations/001_init.sql"),
+    path.join(process.cwd(), "db/migrations"),
+    path.join(root, "db/migrations"),
   ];
-  for (const p of candidates) {
+  for (const dir of candidates) {
     try {
-      await readFile(p, "utf8");
-      return p;
+      await readFile(path.join(dir, "001_init.sql"), "utf8");
+      return dir;
     } catch {
       /* try next */
     }
@@ -39,12 +39,34 @@ export async function migrateAndSeed(): Promise<void> {
   const config = loadConfig();
   const pool = createPool(config);
   try {
-    const initSql = await readFile(await initSqlPath(), "utf8");
-    await pool.query(initSql);
-    const [appliedInit] = await pool.query("SELECT id FROM schema_migrations WHERE id = '001_init'");
-    const applied = appliedInit as Array<{ id: string }>;
-    if (applied.length === 0) {
-      await pool.query("INSERT INTO schema_migrations (id) VALUES (?)", ["001_init"]);
+    const dir = await migrationsDir();
+    const files = (await readdir(dir))
+      .filter((name) => /^\d+_.*\.sql$/.test(name))
+      .sort();
+    if (!files.includes("001_init.sql")) {
+      throw new Error("missing_migration_sql");
+    }
+    for (const file of files) {
+      const id = file.replace(/\.sql$/, "");
+      const sql = await readFile(path.join(dir, file), "utf8");
+      if (id === "001_init") {
+        await pool.query(sql);
+        const [appliedInit] = await pool.query(
+          "SELECT id FROM schema_migrations WHERE id = ?",
+          [id],
+        );
+        if ((appliedInit as Array<{ id: string }>).length === 0) {
+          await pool.query("INSERT INTO schema_migrations (id) VALUES (?)", [id]);
+        }
+        continue;
+      }
+      const [appliedRows] = await pool.query(
+        "SELECT id FROM schema_migrations WHERE id = ?",
+        [id],
+      );
+      if ((appliedRows as Array<{ id: string }>).length > 0) continue;
+      await pool.query(sql);
+      await pool.query("INSERT INTO schema_migrations (id) VALUES (?)", [id]);
     }
     const [events] = await pool.query("SELECT id FROM events LIMIT 1");
     if ((events as Array<{ id: string }>).length === 0) {

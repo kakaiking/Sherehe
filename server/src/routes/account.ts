@@ -9,7 +9,7 @@ export function accountRouter(pool: Pool): Router {
     try {
       const user = req.user;
       if (!user) return;
-      const hasTicket = await userHasDownloadedTicket(pool, user.id);
+      const hasTicket = await userHasDownloadedTicket(pool, user.id, user.kind);
       res.json({ hasTicket });
     } catch (err) {
       next(err);
@@ -24,10 +24,10 @@ export function accountRouter(pool: Pool): Router {
                 oi.title, oi.sku_code, oi.qty
          FROM orders o
          LEFT JOIN order_items oi ON oi.order_id = o.id
-         WHERE o.user_id = ?
+         WHERE o.user_id = ? AND o.account_kind = ?
          ORDER BY o.created_at DESC, oi.id ASC
          LIMIT 50`,
-        [user.id],
+        [user.id, user.kind],
       );
       res.json({
         orders: rows.map((row) => ({

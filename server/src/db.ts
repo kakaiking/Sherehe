@@ -22,6 +22,13 @@ export function isSelectSql(sql: string): boolean {
   return /^\s*SELECT\b/i.test(sql);
 }
 
+/** Postgres unique_violation, plus the mysql2 code some call sites still check. */
+export function isUniqueViolation(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+  const code = "code" in err ? err.code : undefined;
+  return code === "23505" || code === "ER_DUP_ENTRY";
+}
+
 type Queryable = {
   query: (sql: string, params?: unknown[]) => Promise<pg.QueryResult>;
 };

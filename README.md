@@ -1,6 +1,6 @@
 # Sherehe
 
-Last updated: 2026-09-19 05:33 AM CDT
+Last updated: 2026-09-19 05:58 AM CDT
 
 Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Tickets, partners, vendors, catering bookings, and a small shop.
 
@@ -20,7 +20,7 @@ Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at
 
 Guests buy phased event tickets (Early Bird through VIIP, group of five, optional flash sale under 200 attendees) for the night at Fused Lens Studios. The header, home poster, ticket/vendor/partner flows, and PDF stubs show that date and studio. Partners and sponsors apply for review. Vendors pick a package and pay a fee. On the pick list each stall is a chit: category, name, fee, space, then labeled set-up / hours / pay-by, with operating rules quieter underneath. Customers can book FWW services (those bookings use the customer's own event date, not Sherehe's) and buy products. Payments go through M-Pesa STK Push (mock mode locally).
 
-The public UI is a mobile-first barbecue pit: charcoal, flame, and sauce-pink, with a four-item bottom dock on phones (**Home**, **Tickets**, **Shop**, **You**). Sign-in has a three-gate toggle — **User**, **Partner**, **Vendor** — like Carelink’s portal switch. Google creates the account for that gate; the same Google email cannot enter a different gate later. Staff sign in on **User**. Light and dark palettes still follow the operating system. There is no theme toggle.
+The public UI is a mobile-first barbecue pit: charcoal, flame, and sauce-pink, with a four-item bottom dock on phones (**Home**, **Tickets**, **Shop**, **You**). Sign-in has a three-gate toggle — **User**, **Partner**, **Vendor** — like Carelink’s portal switch. Google creates or reuses the row in that gate’s table (`users`, `partners`, or `vendors`); the same email can hold an account in all three, each with its own id. Staff sign in on **User**. Light and dark palettes still follow the operating system. There is no theme toggle.
 
 **Tickets** are four steps: pick, quantity, pay with M-Pesa, then download a charcoal pit PDF stub. **Shop** on the user and partner gates is a three-column food grid (nine plates a page, numbered pager). Tapping a plate opens the same quantity → M-Pesa → download receipt stepper; the paid row lands in **Records** on You. On the vendor gate, Shop is that stall’s own plates (add / edit / delete). Tapping a plate lists who bought it and the M-Pesa receipt — not checkout. The offering is locked after step one; a left-arrow back control returns to the previous page. A signed-out tap on step one stores that pick and sends the visitor to **Continue with Google**, then returns them to step two. Signing in from the Sign in screen with nothing saved lands on **Home**. Google stores the display name (shown on **You** above email and phone, and on stub/receipt lines). A Kenyan mobile is entered on **Receive Prompt** (country code **+254** plus nine spaced digits), not after Google. Sign out opens **Sign in**, not a signed-out holding page.
 
@@ -149,7 +149,7 @@ sequenceDiagram
       Express->>Buyer: /login with an allowlisted error code
     else success
       React->>Express: POST /v1/auth/google/callback (verifier)
-      Express->>Postgres: Upsert user, session cookie
+      Express->>Postgres: Upsert that gate's account, session cookie
       Express->>Buyer: Resume step 2 with the same pick, or Home plus snackbar
     end
   else signed in
@@ -184,6 +184,32 @@ sequenceDiagram
 ```
 
 Public routes: `/`, `/tickets`, `/shop`, `/account`, `/orders/:id`, `/login`. Partner/vendor application and services/staff screens remain at `/partners`, `/vendors`, `/services`, `/staff` (not on the dock). On Vercel those paths are not files — they need the catch-all rewrite to `index.html` after `/v1` and `/health`.
+
+Guests, partners, and vendors are separate identity tables. Email and Google subject are unique **inside** each table, not across the product.
+
+```mermaid
+erDiagram
+  users ||--o{ sessions : "user gate"
+  partners ||--o{ sessions : "partner gate"
+  vendors ||--o{ sessions : "vendor gate"
+  users {
+    char id PK
+    varchar email UK
+  }
+  partners {
+    char id PK
+    varchar email UK
+  }
+  vendors {
+    char id PK
+    varchar email UK
+  }
+  sessions {
+    char id PK
+    varchar account_kind
+    char user_id
+  }
+```
 
 ## Troubleshooting
 

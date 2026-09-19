@@ -94,12 +94,13 @@ async function applyStkOutcome(
 
 async function loadOwnedOrder(
   pool: Pool,
-  user: { id: string; role: string },
+  user: { id: string; role: string; kind?: string },
   orderId: string,
 ): Promise<
   | {
       id: string;
       user_id: string;
+      account_kind: string;
       kind: string;
       status: string;
       total_ksh: number;
@@ -109,13 +110,14 @@ async function loadOwnedOrder(
   | undefined
 > {
   const [rows] = await pool.query<RowDataPacket[]>(
-    "SELECT id, user_id, kind, status, total_ksh, created_at, paid_at FROM orders WHERE id = ?",
+    "SELECT id, user_id, account_kind, kind, status, total_ksh, created_at, paid_at FROM orders WHERE id = ?",
     [orderId],
   );
   const order = rows[0] as
     | {
         id: string;
         user_id: string;
+        account_kind: string;
         kind: string;
         status: string;
         total_ksh: number;
@@ -123,7 +125,11 @@ async function loadOwnedOrder(
         paid_at: Date | null;
       }
     | undefined;
-  if (!order || (order.user_id !== user.id && user.role !== "staff")) {
+  if (
+    !order ||
+    ((order.user_id !== user.id || order.account_kind !== user.kind) &&
+      user.role !== "staff")
+  ) {
     return undefined;
   }
   return order;
@@ -167,6 +173,7 @@ export function ordersRouter(
           user.id,
           parsed.data.code as TicketCode,
           parsed.data.qty,
+          user.kind,
         );
       } catch (err) {
         const name = (err as Error).message;

@@ -14,6 +14,12 @@ import {
   shopOffset,
   shopPageCount,
 } from "../shop/paging.js";
+import {
+  ORDER_BUYER_DISPLAY,
+  ORDER_BUYER_EMAIL,
+  ORDER_BUYER_JOINS,
+  ORDER_BUYER_PHONE,
+} from "../auth/accounts.js";
 
 const BookBody = z.object({
   slug: z.string().min(1).max(64),
@@ -162,11 +168,13 @@ export function commerceRouter(
       const [sales] = await pool.query<RowDataPacket[]>(
         `SELECT o.id AS order_id, o.status, o.total_ksh, o.paid_at, o.created_at,
                 oi.qty, oi.unit_price_ksh,
-                u.display_name, u.email, u.phone,
+                ${ORDER_BUYER_DISPLAY} AS display_name,
+                ${ORDER_BUYER_EMAIL} AS email,
+                ${ORDER_BUYER_PHONE} AS phone,
                 pay.receipt
          FROM order_items oi
          JOIN orders o ON o.id = oi.order_id
-         JOIN users u ON u.id = o.user_id
+         ${ORDER_BUYER_JOINS}
          LEFT JOIN payments pay ON pay.order_id = o.id AND pay.status = 'succeeded'
          WHERE oi.sku_kind = 'product' AND oi.sku_code = ?
          ORDER BY COALESCE(o.paid_at, o.created_at) DESC
@@ -331,9 +339,9 @@ export function commerceRouter(
       const orderId = randomUUID();
       const bookingId = randomUUID();
       await pool.query(
-        `INSERT INTO orders (id, user_id, event_id, kind, status, total_ksh, hold_expires_at)
-         VALUES (?, ?, ?, 'service', 'pending', ?, NOW() + INTERVAL '10 minutes')`,
-        [orderId, user.id, eventId, off.price_ksh],
+        `INSERT INTO orders (id, account_kind, user_id, event_id, kind, status, total_ksh, hold_expires_at)
+         VALUES (?, ?, ?, ?, 'service', 'pending', ?, NOW() + INTERVAL '10 minutes')`,
+        [orderId, user.kind, user.id, eventId, off.price_ksh],
       );
       await pool.query(
         `INSERT INTO order_items (id, order_id, sku_kind, sku_code, title, qty, unit_price_ksh, seats)
@@ -341,10 +349,11 @@ export function commerceRouter(
         [randomUUID(), orderId, parsed.data.slug, off.name, off.price_ksh],
       );
       await pool.query(
-        `INSERT INTO service_bookings (id, user_id, offering_id, event_date, pax, notes, status, order_id)
-         VALUES (?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        `INSERT INTO service_bookings (id, account_kind, user_id, offering_id, event_date, pax, notes, status, order_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?)`,
         [
           bookingId,
+          user.kind,
           user.id,
           off.id,
           parsed.data.eventDate,
@@ -431,9 +440,9 @@ export function commerceRouter(
         const orderId = randomUUID();
         const total = prod.price_ksh * parsed.data.qty;
         await conn.query(
-          `INSERT INTO orders (id, user_id, event_id, kind, status, total_ksh, hold_expires_at)
-           VALUES (?, ?, ?, 'product', 'pending', ?, NOW() + INTERVAL '10 minutes')`,
-          [orderId, user.id, eventId, total],
+          `INSERT INTO orders (id, account_kind, user_id, event_id, kind, status, total_ksh, hold_expires_at)
+           VALUES (?, ?, ?, ?, 'product', 'pending', ?, NOW() + INTERVAL '10 minutes')`,
+          [orderId, user.kind, user.id, eventId, total],
         );
         await conn.query(
           `INSERT INTO order_items (id, order_id, sku_kind, sku_code, title, qty, unit_price_ksh, seats)

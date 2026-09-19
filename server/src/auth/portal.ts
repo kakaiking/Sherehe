@@ -15,8 +15,8 @@ export function parsePortal(raw: unknown): Portal | null {
 }
 
 /**
- * Staff share the guest (user) gate. Everyone else must pick the portal
- * they signed up on.
+ * Staff share the guest (user) gate. Partner and vendor each have their own
+ * identity table, so the same email can sign in on every gate.
  */
 export function roleMatchesPortal(role: UserRole, portal: Portal): boolean {
   if (role === "staff") return portal === "user";
