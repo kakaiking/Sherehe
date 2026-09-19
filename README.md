@@ -1,6 +1,6 @@
 # Sherehe
 
-Last updated: 2026-09-19 06:15 AM CDT
+Last updated: 2026-09-19 06:38 AM CDT
 
 Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Tickets, partners, vendors, catering bookings, and a small shop.
 
@@ -22,7 +22,7 @@ Guests buy phased event tickets (Early Bird through VIIP, group of five, optiona
 
 The public UI is a mobile-first barbecue pit: charcoal, flame, and sauce-pink, with a four-item bottom dock on phones (**Home**, **Tickets**, **Shop**, **You**). Sign-in has a three-gate toggle — **User**, **Partner**, **Vendor** — like Carelink’s portal switch. Google creates or reuses the row in that gate’s table (`users`, `partners`, or `vendors`); the same email can hold an account in all three, each with its own id. Staff sign in on **User**. Light and dark palettes still follow the operating system. There is no theme toggle.
 
-**Tickets** are four steps: pick, quantity, pay with M-Pesa, then download a charcoal pit PDF stub. **Shop** on the user and partner gates is a three-column food grid (nine plates a page, numbered pager). Tapping a plate opens the same quantity → M-Pesa → download receipt stepper; the paid row lands in **Records** on You. On the vendor gate, Shop is that stall’s own plates (add / edit / delete). Tapping a plate lists who bought it and the M-Pesa receipt — not checkout. The offering is locked after step one; a left-arrow back control returns to the previous page. A signed-out tap on step one stores that pick and sends the visitor to **Continue with Google**, then returns them to step two. Signing in from the Sign in screen with nothing saved lands on **Home**. Google stores the display name (shown on **You** above email and phone, and on stub/receipt lines). A Kenyan mobile is entered on **Receive Prompt** (country code **+254** plus nine spaced digits), not after Google. Sign out opens **Sign in**, not a signed-out holding page.
+**Tickets** are four steps: pick, quantity, pay with M-Pesa, then download a charcoal pit PDF stub. **Shop** on the user and partner gates lists vendors that have meals. Tapping a stall opens that stall’s three-column meal grid (nine a page, numbered pager). Tapping a meal opens quantity → M-Pesa → download receipt; the paid row lands in **Records** on You. On the vendor gate, Shop is that stall’s own meals (add / edit / delete). Tapping a meal lists who bought it and the M-Pesa receipt — not checkout. The offering is locked after a meal is picked; a left-arrow back control returns to the previous page (meals, then vendors). A signed-out tap on a meal stores that stall and meal and sends the visitor to **Continue with Google**, then returns them to quantity. Signing in from the Sign in screen with nothing saved lands on **Home**. Google stores the display name (shown on **You** above email and phone, and on stub/receipt lines). A Kenyan mobile is entered on **Receive Prompt** (country code **+254** plus nine spaced digits), not after Google. Sign out opens **Sign in**, not a signed-out holding page.
 
 ## Prerequisites
 
@@ -195,6 +195,30 @@ sequenceDiagram
 ```
 
 Public routes: `/`, `/tickets`, `/shop`, `/account`, `/orders/:id`, `/login`. Partner/vendor application and services/staff screens remain at `/partners`, `/vendors`, `/services`, `/staff` (not on the dock). On Vercel those paths are not files — they need the catch-all rewrite to `index.html` after `/v1` and `/health`.
+
+Catalog, account, and staff GETs paint from `localStorage` plus an in-memory map (same idea as the internal portal: cache-first, then Postgres). A cold visit shows a skeleton. Coming back to a page within 45 seconds does not hit the API. A full reload paints the stored snapshot immediately and refreshes from `/v1` in the background. Session cookies stay httpOnly; sign-out drops only private rows.
+
+```mermaid
+sequenceDiagram
+  participant Buyer
+  participant React
+  participant Store as localStorage
+  participant Express
+  participant Postgres
+  Buyer->>React: Open Tickets
+  React->>Store: Read catalog:tickets
+  alt memory copy younger than 45s
+    Store-->>React: Paint list
+  else disk hit or miss
+    Store-->>React: Paint snapshot or skeleton
+    React->>Express: GET /v1/catalog/tickets
+    Express->>Postgres: Read offerings
+    Postgres-->>Express: Rows
+    Express-->>React: JSON
+    React->>Store: Write snapshot
+    React->>Buyer: Replace skeleton or stale rows
+  end
+```
 
 Guests, partners, and vendors are separate identity tables. Email and Google subject are unique **inside** each table, not across the product.
 

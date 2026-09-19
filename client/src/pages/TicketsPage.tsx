@@ -1,6 +1,9 @@
 import { useEffect, useState, type ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, formatKsh, type ApiError } from "../api";
+import { ChoiceSkeleton } from "../cache/Skeleton";
+import { markStale, PUBLIC_UID, queryKeys } from "../cache/queryCache";
+import { useApiQuery } from "../cache/useCachedQuery";
 import type { User } from "../App";
 import { needsAnotherTicketConfirm } from "../flow/anotherTicket";
 import { ConfirmModal } from "../flow/ConfirmModal";
@@ -35,7 +38,12 @@ export function TicketsPage({
   user: User | null;
   onAuth?: (user: User) => void;
 }): ReactElement {
-  const [offerings, setOfferings] = useState<Offering[]>([]);
+  const { data, loading, error: loadError } = useApiQuery<{ offerings: Offering[] }>(
+    queryKeys.tickets,
+    "/v1/catalog/tickets",
+    { uid: PUBLIC_UID },
+  );
+  const offerings = data?.offerings ?? [];
   const [qty, setQty] = useState(1);
   const [phone, setPhone] = useState(() =>
     extractKenyanNationalDigits(user?.phone ?? ""),
@@ -45,8 +53,6 @@ export function TicketsPage({
   const [waiting, setWaiting] = useState(false);
   const [onPay, setOnPay] = useState(false);
   const [askAnother, setAskAnother] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { show } = useSnackbar();
   const gate = useAuthGate(user);
@@ -65,19 +71,6 @@ export function TicketsPage({
     if (!user?.phone) return;
     setPhone(extractKenyanNationalDigits(user.phone));
   }, [user?.phone]);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const data = await api<{ offerings: Offering[] }>("/v1/catalog/tickets");
-        setOfferings(data.offerings);
-      } catch {
-        setLoadError("Could not load tickets.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, []);
 
   const selected = offerings.find((o) => o.code === pick);
   const step = onPay ? 2 : pickStep;
@@ -135,6 +128,8 @@ export function TicketsPage({
         method: "POST",
         body: JSON.stringify({ code: selected.code, qty }),
       });
+      markStale(PUBLIC_UID, queryKeys.tickets);
+      if (user) markStale(user.id, queryKeys.accountOrders);
       setWaiting(true);
       show("Ticket order started. Approve M-Pesa on your phone.");
       const outcome = await waitForPaid(order.orderId);
@@ -183,8 +178,8 @@ export function TicketsPage({
         </p>
       ) : null}
       {step === 0 ? (
-        loading ? (
-          <p className="status">Loading tickets…</p>
+        loading && offerings.length === 0 ? (
+          <ChoiceSkeleton label="Loading tickets" />
         ) : offerings.length === 0 && !loadError ? (
           <p className="status">
             No tickets are on sale at this hour. Check back when the coals are

@@ -1,5 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactElement, type ReactNode } from "react";
-import { api } from "./api";
+import { createContext, useContext, type ReactElement, type ReactNode } from "react";
+import { PUBLIC_UID, queryKeys } from "./cache/queryCache";
+import { useApiQuery } from "./cache/useCachedQuery";
 import { EVENT_STARTS_AT, EVENT_VENUE } from "./eventFacts";
 
 export type CatalogEvent = {
@@ -19,19 +20,11 @@ export const FALLBACK_EVENT: CatalogEvent = {
 const EventContext = createContext<CatalogEvent>(FALLBACK_EVENT);
 
 export function EventProvider({ children }: { children: ReactNode }): ReactElement {
-  const [event, setEvent] = useState<CatalogEvent>(FALLBACK_EVENT);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const next = await api<CatalogEvent>("/v1/catalog/event");
-        if (next.venue && next.startsAt) setEvent(next);
-      } catch {
-        /* keep fallback so the night and studio still read on a catalog miss */
-      }
-    })();
-  }, []);
-
+  const { data } = useApiQuery<CatalogEvent>(queryKeys.event, "/v1/catalog/event", {
+    uid: PUBLIC_UID,
+  });
+  const event =
+    data && data.venue && data.startsAt ? data : FALLBACK_EVENT;
   return <EventContext.Provider value={event}>{children}</EventContext.Provider>;
 }
 

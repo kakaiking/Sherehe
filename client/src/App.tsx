@@ -1,6 +1,15 @@
 import { useEffect, useState, type ReactElement, type SVGProps } from "react";
 import { NavLink, Route, Routes } from "react-router-dom";
 import { api, ensureCsrf } from "./api";
+import {
+  loadQuery,
+  peekQuery,
+  queryKeys,
+  resetPrivateCache,
+  SESSION_UID,
+  setCacheUid,
+  writeQuery,
+} from "./cache/queryCache";
 import { HomePage } from "./pages/HomePage";
 import { TicketsPage } from "./pages/TicketsPage";
 import { AuthPage } from "./pages/AuthPage";
@@ -36,17 +45,48 @@ function Icon({
   );
 }
 
+function readCachedUser(): User | null {
+  const peeked = peekQuery<User | null>(SESSION_UID, queryKeys.me);
+  if (!peeked.hit || peeked.value === null) return null;
+  if (typeof peeked.value !== "object" || !("id" in peeked.value)) return null;
+  return peeked.value;
+}
+
 export function App(): ReactElement {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUserState] = useState<User | null>(() => {
+    const cached = readCachedUser();
+    if (cached) setCacheUid(cached.id);
+    return cached;
+  });
+
+  function setUser(next: User | null): void {
+    if (!next) {
+      resetPrivateCache();
+      writeQuery(SESSION_UID, queryKeys.me, null);
+      setUserState(null);
+      return;
+    }
+    setCacheUid(next.id);
+    writeQuery(SESSION_UID, queryKeys.me, next);
+    setUserState(next);
+  }
 
   useEffect(() => {
     void (async () => {
       await ensureCsrf();
       try {
-        const me = await api<User>("/v1/auth/me");
-        setUser(me);
+        const me = await loadQuery<User>(
+          SESSION_UID,
+          queryKeys.me,
+          () => api<User>("/v1/auth/me"),
+          { force: true },
+        );
+        setCacheUid(me.id);
+        setUserState(me);
       } catch {
-        setUser(null);
+        resetPrivateCache();
+        writeQuery(SESSION_UID, queryKeys.me, null);
+        setUserState(null);
       }
     })();
   }, []);

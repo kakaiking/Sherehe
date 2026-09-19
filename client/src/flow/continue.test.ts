@@ -55,4 +55,14 @@ describe("continuePath", () => {
       "/tickets?pick=early_bird",
     );
   });
+
+  it("keeps extra shop params ahead of the pick", () => {
+    expect(
+      continuePath("/shop", "nyama-choma", {
+        vendor: "11111111-1111-4111-8111-111111111111",
+      }),
+    ).toBe(
+      "/shop?vendor=11111111-1111-4111-8111-111111111111&pick=nyama-choma",
+    );
+  });
 });

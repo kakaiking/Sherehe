@@ -12,6 +12,7 @@ import {
   productSlug,
   SHOP_PAGE_SIZE,
   shopOffset,
+  shopOwnerId,
   shopPageCount,
 } from "../shop/paging.js";
 import {
@@ -46,6 +47,7 @@ const SlugParam = z.string().min(1).max(64).regex(/^[a-z0-9-]+$/);
 
 const PageQuery = z.object({
   page: z.coerce.number().int().min(1).max(1000).optional(),
+  vendor: z.string().uuid().optional(),
 });
 
 export function commerceRouter(
@@ -66,23 +68,53 @@ export function commerceRouter(
     }
   });
 
+  r.get("/stalls", async (_req, res, next) => {
+    try {
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT v.id,
+                COALESCE(NULLIF(v.display_name, ''), NULLIF(v.given_name, ''), 'Stall') AS name,
+                COUNT(*)::int AS meal_count
+         FROM vendors v
+         INNER JOIN products p ON p.owner_id = v.id
+         GROUP BY v.id, v.display_name, v.given_name
+         ORDER BY name ASC, v.id ASC`,
+      );
+      res.json({ stalls: rows });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   r.get("/products", async (req, res, next) => {
     try {
       const parsed = PageQuery.safeParse(req.query);
       const requested = parsed.success ? (parsed.data.page ?? 1) : 1;
-      const vendor = req.user?.role === "vendor" ? req.user : null;
-      const where = vendor ? "WHERE owner_id = ?" : "";
-      const countParams = vendor ? [vendor.id] : [];
+      const ownerId = shopOwnerId({
+        role: req.user?.role,
+        userId: req.user?.id,
+        stallQuery: parsed.success ? parsed.data.vendor : undefined,
+      });
+      if (!ownerId) {
+        res.json({
+          products: [],
+          page: 1,
+          pageSize: SHOP_PAGE_SIZE,
+          total: 0,
+          pages: 1,
+        });
+        return;
+      }
       const [countRows] = await pool.query<RowDataPacket[]>(
-        `SELECT COUNT(*) AS n FROM products ${where}`,
-        countParams,
+        "SELECT COUNT(*) AS n FROM products WHERE owner_id = ?",
+        [ownerId],
       );
       const total = Number(countRows[0]?.["n"] ?? 0);
       const page = clampShopPage(requested, total);
       const [rows] = await pool.query<RowDataPacket[]>(
-        `SELECT slug, name, description, price_ksh, stock FROM products ${where}
+        `SELECT slug, name, description, price_ksh, stock FROM products
+         WHERE owner_id = ?
          ORDER BY name LIMIT ? OFFSET ?`,
-        vendor ? [vendor.id, SHOP_PAGE_SIZE, shopOffset(page)] : [SHOP_PAGE_SIZE, shopOffset(page)],
+        [ownerId, SHOP_PAGE_SIZE, shopOffset(page)],
       );
       res.json({
         products: rows,
@@ -145,7 +177,7 @@ export function commerceRouter(
           type: "https://httpstatuses.com/422",
           title: "Unprocessable Entity",
           status: 422,
-          detail: "Unknown plate.",
+          detail: "Unknown meal.",
         });
         return;
       }
@@ -161,7 +193,7 @@ export function commerceRouter(
           type: "https://httpstatuses.com/404",
           title: "Not Found",
           status: 404,
-          detail: "Unknown plate.",
+          detail: "Unknown meal.",
         });
         return;
       }
@@ -231,7 +263,7 @@ export function commerceRouter(
           type: "https://httpstatuses.com/404",
           title: "Not Found",
           status: 404,
-          detail: "Unknown plate.",
+          detail: "Unknown meal.",
         });
         return;
       }
@@ -253,7 +285,7 @@ export function commerceRouter(
           type: "https://httpstatuses.com/422",
           title: "Unprocessable Entity",
           status: 422,
-          detail: "Unknown plate.",
+          detail: "Unknown meal.",
         });
         return;
       }
@@ -273,7 +305,7 @@ export function commerceRouter(
           type: "https://httpstatuses.com/409",
           title: "Conflict",
           status: 409,
-          detail: "This plate has orders. Edit stock instead of deleting it.",
+          detail: "This meal has orders. Edit stock instead of deleting it.",
         });
         return;
       }
@@ -287,7 +319,7 @@ export function commerceRouter(
           type: "https://httpstatuses.com/404",
           title: "Not Found",
           status: 404,
-          detail: "Unknown plate.",
+          detail: "Unknown meal.",
         });
         return;
       }
@@ -388,7 +420,7 @@ export function commerceRouter(
           type: "https://httpstatuses.com/403",
           title: "Forbidden",
           status: 403,
-          detail: "The stall shop lists your plates. Guests and partners buy from the other gates.",
+          detail: "The stall shop lists your meals. Guests and partners buy from the other gates.",
         });
         return;
       }

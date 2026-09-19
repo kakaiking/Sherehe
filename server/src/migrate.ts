@@ -99,7 +99,7 @@ export async function migrateAndSeed(): Promise<void> {
     if ((events as Array<{ id: string }>).length === 0) {
       await seed(pool, config);
     }
-    await ensureFoodPlates(pool);
+    await ensureFoodMeals(pool);
     await pool.query("UPDATE events SET venue = ?, starts_at = ?", [
       EVENT_VENUE,
       EVENT_STARTS_AT,
@@ -121,12 +121,12 @@ export async function migrateAndSeed(): Promise<void> {
   }
 }
 
-const FOOD_PLATES: Array<[string, string, string, number, number]> = [
+const FOOD_MEALS: Array<[string, string, string, number, number]> = [
   ["nyama-choma", "Nyama choma", "Charcoal goat, kachumbari on the side.", 1200, 80],
   ["mbuzi-ribs", "Mbuzi ribs", "Slow ribs, chilli salt.", 1500, 40],
   ["chicken-skewers", "Chicken skewers", "Three skewers, peanut dip.", 900, 60],
-  ["samosa-plate", "Samosa plate", "Six beef samosas.", 600, 90],
-  ["ugali-sukuma", "Ugali and sukuma", "The house plate.", 500, 100],
+  ["samosa-plate", "Samosas", "Six beef samosas.", 600, 90],
+  ["ugali-sukuma", "Ugali and sukuma", "The house meal.", 500, 100],
   ["pilau-bowl", "Pilau bowl", "Spiced rice, raisins, kachumbari.", 800, 70],
   ["mutura", "Mutura", "Street mutura, hot off the coal.", 400, 50],
   ["mahamri", "Mahamri", "Four mahamri, cardamom sugar.", 350, 80],
@@ -136,13 +136,25 @@ const FOOD_PLATES: Array<[string, string, string, number, number]> = [
   ["sukuma-extra", "Extra sukuma", "A side of greens.", 200, 120],
 ];
 
-async function ensureFoodPlates(pool: Pool): Promise<void> {
-  for (const p of FOOD_PLATES) {
+const DEMO_STALLS: Array<{ email: string; displayName: string }> = [
+  { email: "pit-side@sherehe.local", displayName: "Pit Side" },
+  { email: "coal-corner@sherehe.local", displayName: "Coal Corner" },
+];
+
+/** Backfill missing seed meals onto the first stall vendor when one exists. */
+async function ensureFoodMeals(pool: Pool): Promise<void> {
+  const [vendorRows] = await pool.query(
+    "SELECT id FROM vendors ORDER BY created_at ASC, id ASC LIMIT 1",
+  );
+  const ownerId = (vendorRows as Array<{ id: string }>)[0]?.id;
+  if (!ownerId) return;
+  for (const p of FOOD_MEALS) {
     const [rows] = await pool.query("SELECT id FROM products WHERE slug = ?", [p[0]]);
     if ((rows as Array<{ id: string }>).length > 0) continue;
     await pool.query(
-      "INSERT INTO products (id, slug, name, description, price_ksh, stock) VALUES (?, ?, ?, ?, ?, ?)",
-      [randomUUID(), ...p],
+      `INSERT INTO products (id, slug, name, description, price_ksh, stock, owner_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [randomUUID(), ...p, ownerId],
     );
   }
 }
@@ -236,11 +248,23 @@ async function seed(
       [randomUUID(), ...s],
     );
   }
-  const products: Array<[string, string, string, number, number]> = FOOD_PLATES;
-  for (const p of products) {
+  const stallIds: string[] = [];
+  for (const stall of DEMO_STALLS) {
+    const id = randomUUID();
+    stallIds.push(id);
     await pool.query(
-      "INSERT INTO products (id, slug, name, description, price_ksh, stock) VALUES (?, ?, ?, ?, ?, ?)",
-      [randomUUID(), ...p],
+      `INSERT INTO vendors (id, email, display_name, given_name)
+       VALUES (?, ?, ?, ?)`,
+      [id, stall.email, stall.displayName, stall.displayName.split(" ")[0]],
+    );
+  }
+  for (let i = 0; i < FOOD_MEALS.length; i++) {
+    const p = FOOD_MEALS[i]!;
+    const ownerId = stallIds[i % stallIds.length]!;
+    await pool.query(
+      `INSERT INTO products (id, slug, name, description, price_ksh, stock, owner_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [randomUUID(), ...p, ownerId],
     );
   }
   if (config.STAFF_EMAIL && config.STAFF_PASSWORD && config.STAFF_PHONE) {

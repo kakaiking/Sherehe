@@ -58,7 +58,7 @@ function drawCenteredFitted(
 }
 
 /**
- * Charcoal chit for a paid plate: name, quantity, amount, optional M-Pesa
+ * Charcoal chit for a paid meal: name, quantity, amount, optional M-Pesa
  * receipt. No order UUIDs on the face.
  */
 export async function productReceiptPdf(
@@ -97,7 +97,7 @@ export async function productReceiptPdf(
     font: display,
     color: cream,
   });
-  const tag = "plate receipt";
+  const tag = "meal receipt";
   page.drawText(tag, {
     x: centerX(tag, body, 9),
     y: PAGE_H - 98,

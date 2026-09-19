@@ -2,6 +2,13 @@ import { useEffect, useState, type FormEvent, type ReactElement } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { api, formatKsh, type ApiError } from "../../api";
 import type { User } from "../../App";
+import { GridSkeleton } from "../../cache/Skeleton";
+import {
+  markPrefixStale,
+  markStale,
+  queryKeys,
+} from "../../cache/queryCache";
+import { useApiQuery } from "../../cache/useCachedQuery";
 import { continuePath } from "../../flow/continue";
 import { persistPayPhone } from "../../flow/persistPayPhone";
 import { StepForm } from "../../flow/StepForm";
@@ -26,6 +33,12 @@ export type ShopProduct = {
   stock: number;
 };
 
+export type ShopStall = {
+  id: string;
+  name: string;
+  meal_count: number;
+};
+
 export function GuestShop({
   user,
   onAuth = () => undefined,
@@ -33,13 +46,10 @@ export function GuestShop({
   user: User | null;
   onAuth?: (user: User) => void;
 }): ReactElement {
-  const [products, setProducts] = useState<ShopProduct[]>([]);
-  const [pages, setPages] = useState(1);
   const [qty, setQty] = useState(1);
   const [phone, setPhone] = useState(() =>
     extractKenyanNationalDigits(user?.phone ?? ""),
   );
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [waiting, setWaiting] = useState(false);
@@ -55,10 +65,27 @@ export function GuestShop({
     setParams,
   } = usePickStep(user);
   const location = useLocation();
-  const page = Math.max(
-    1,
-    Number(new URLSearchParams(location.search).get("page") ?? "1") || 1,
+  const search = new URLSearchParams(location.search);
+  const page = Math.max(1, Number(search.get("page") ?? "1") || 1);
+  const vendorId = search.get("vendor") ?? "";
+  const shopUid = user?.id ?? "anon";
+  const stallsQ = useApiQuery<{ stalls: ShopStall[] }>(
+    queryKeys.stalls,
+    "/v1/commerce/stalls",
+    { uid: shopUid },
   );
+  const catalog = useApiQuery<{
+    products: ShopProduct[];
+    pages: number;
+    page: number;
+  }>(
+    queryKeys.products(page, vendorId),
+    `/v1/commerce/products?page=${page}&vendor=${encodeURIComponent(vendorId)}`,
+    { uid: shopUid, enabled: Boolean(vendorId) },
+  );
+  const stalls = stallsQ.data?.stalls ?? [];
+  const products = catalog.data?.products ?? [];
+  const pages = catalog.data?.pages ?? 1;
 
   useEffect(() => {
     if (pickStep === 0) {
@@ -72,30 +99,17 @@ export function GuestShop({
     setPhone(extractKenyanNationalDigits(user.phone));
   }, [user?.phone]);
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const data = await api<{
-          products: ShopProduct[];
-          pages: number;
-          page: number;
-        }>(`/v1/commerce/products?page=${page}`);
-        setProducts(data.products);
-        setPages(data.pages);
-        setLoadError(null);
-      } catch {
-        setLoadError("Could not load plates.");
-        setProducts([]);
-      }
-    })();
-  }, [page]);
-
+  const stall = stalls.find((s) => s.id === vendorId);
   const selected = products.find((p) => p.slug === pick);
-  const step = onPay ? 2 : pickStep;
+  const catalogStep = pickStep === 1 ? 2 : vendorId ? 1 : 0;
+  const step = onPay ? 3 : catalogStep;
   const phoneLabel = isCompleteKenyanNational(phone)
     ? formatKenyanMsisdnDisplay(phone)
     : null;
   const totalKsh = selected ? selected.price_ksh * qty : 0;
+  const steps = stall
+    ? SHOP_STEPS.map((s) => (s.id === "pick" ? { ...s, title: stall.name } : s))
+    : SHOP_STEPS;
 
   function goBack(): void {
     if (waiting) return;
@@ -104,13 +118,26 @@ export function GuestShop({
       setError(null);
       return;
     }
-    backToPick();
+    if (pickStep === 1) {
+      backToPick();
+      return;
+    }
+    setParams(
+      (prev) => {
+        const q = new URLSearchParams(prev);
+        q.delete("vendor");
+        q.delete("page");
+        q.delete("pick");
+        return q;
+      },
+      { replace: true },
+    );
   }
 
   function toPay(e: FormEvent): void {
     e.preventDefault();
     if (!selected) {
-      setError("Pick a plate first.");
+      setError("Pick a meal first.");
       return;
     }
     setError(null);
@@ -119,7 +146,7 @@ export function GuestShop({
 
   async function sendPrompt(): Promise<void> {
     if (!selected) {
-      setError("Pick a plate first.");
+      setError("Pick a meal first.");
       return;
     }
     if (!isCompleteKenyanNational(phone)) {
@@ -134,8 +161,11 @@ export function GuestShop({
         method: "POST",
         body: JSON.stringify({ slug: selected.slug, qty }),
       });
+      markPrefixStale(shopUid, "commerce:products");
+      markStale(shopUid, queryKeys.stalls);
+      if (user) markStale(user.id, queryKeys.accountOrders);
       setWaiting(true);
-      show("Plate order started. Approve M-Pesa on your phone.");
+      show("Meal order started. Approve M-Pesa on your phone.");
       const outcome = await waitForPaid(order.orderId);
       if (outcome === "paid") {
         void navigate(`/orders/${order.orderId}`);
@@ -151,8 +181,21 @@ export function GuestShop({
     }
   }
 
+  function onChooseStall(s: ShopStall): void {
+    setParams(
+      (prev) => {
+        const q = new URLSearchParams(prev);
+        q.set("vendor", s.id);
+        q.delete("page");
+        q.delete("pick");
+        return q;
+      },
+      { replace: true },
+    );
+  }
+
   function onChoose(p: ShopProduct): void {
-    gate(continuePath("/shop", p.slug), () => {
+    gate(continuePath("/shop", p.slug, { vendor: vendorId }), () => {
       selectPick(p.slug);
     });
   }
@@ -173,15 +216,15 @@ export function GuestShop({
 
   return (
     <StepForm
-      steps={SHOP_STEPS}
+      steps={steps}
       step={step}
       {...(waiting ? {} : { onBack: goBack })}
       footer={
-        step === 1 ? (
+        step === 2 ? (
           <button type="submit" form="shop-qty" disabled={!selected}>
             Pay
           </button>
-        ) : step === 2 ? (
+        ) : step === 3 ? (
           <button type="submit" form="shop-pay" disabled={!payReady || waiting}>
             {waiting ? "Waiting for M-Pesa…" : "Receive Prompt"}
           </button>
@@ -190,19 +233,47 @@ export function GuestShop({
     >
       {step === 0 ? (
         <>
-          {loadError ? (
+          {stallsQ.error ? (
             <p className="error" role="alert">
-              {loadError}
+              {stallsQ.error}
             </p>
           ) : null}
-          {products.length === 0 ? (
-            <p className="status">No plates on the grill yet. Check back when the coals are lit.</p>
+          {stallsQ.loading && stalls.length === 0 ? (
+            <GridSkeleton label="Loading vendors" />
+          ) : stalls.length === 0 ? (
+            <p className="status">No vendors are serving meals yet. Check back when the coals are lit.</p>
           ) : (
-            <ul className="plate-grid">
+            <ul className="meal-grid">
+              {stalls.map((s) => (
+                <li key={s.id}>
+                  <button type="button" className="meal-card" onClick={() => onChooseStall(s)}>
+                    <span className="meal-card-name">{s.name}</span>
+                    <span className="price">
+                      {Number(s.meal_count) === 1 ? "1 meal" : `${Number(s.meal_count)} meals`}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
+      ) : step === 1 ? (
+        <>
+          {catalog.error ? (
+            <p className="error" role="alert">
+              {catalog.error}
+            </p>
+          ) : null}
+          {catalog.loading && products.length === 0 ? (
+            <GridSkeleton label="Loading meals" />
+          ) : products.length === 0 ? (
+            <p className="status">This stall has no meals yet.</p>
+          ) : (
+            <ul className="meal-grid">
               {products.map((p) => (
                 <li key={p.slug}>
-                  <button type="button" className="plate-card" onClick={() => onChoose(p)}>
-                    <span className="plate-card-name">{p.name}</span>
+                  <button type="button" className="meal-card" onClick={() => onChoose(p)}>
+                    <span className="meal-card-name">{p.name}</span>
                     <span className="price">{formatKsh(p.price_ksh)}</span>
                   </button>
                 </li>
@@ -210,7 +281,7 @@ export function GuestShop({
             </ul>
           )}
           {pages > 1 ? (
-            <nav className="page-bar" aria-label="Plate pages">
+            <nav className="page-bar" aria-label="Meal pages">
               {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
                 <button
                   key={n}
@@ -224,10 +295,10 @@ export function GuestShop({
             </nav>
           ) : null}
         </>
-      ) : step === 1 ? (
+      ) : step === 2 ? (
         <form id="shop-qty" onSubmit={toPay}>
           <label>
-            Plate
+            Meal
             <input readOnly value={selected?.name ?? pick} />
           </label>
           <QuantityField value={qty} onChange={setQty} max={Math.max(1, Math.min(20, selected?.stock ?? 20))} />

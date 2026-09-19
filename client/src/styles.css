@@ -1081,6 +1081,95 @@ button:disabled {
   color: var(--muted);
 }
 
+@keyframes skeleton-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.skeleton-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.skeleton-card,
+.skeleton-meal,
+.skeleton-line,
+.skeleton-heat {
+  background: color-mix(in srgb, var(--line) 70%, var(--sunken));
+  animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+
+.skeleton-card {
+  min-height: 52px;
+  border-radius: var(--radius);
+  border: 2px solid var(--line);
+}
+
+.skeleton-meal {
+  min-height: 4.6rem;
+  border-radius: var(--radius-sm);
+  border: 2px solid var(--line);
+}
+
+.lines-skeleton {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.skeleton-line {
+  height: 0.85rem;
+  border-radius: 999px;
+  width: 100%;
+}
+
+.skeleton-line.mid {
+  width: 72%;
+}
+
+.skeleton-line.short {
+  width: 42%;
+}
+
+.skeleton-line.title {
+  height: 2rem;
+  width: 80%;
+}
+
+.skeleton-line.action {
+  height: 2.75rem;
+  width: 10rem;
+  border-radius: var(--radius-sm);
+}
+
+.skeleton-heat {
+  height: 0.85rem;
+  border-radius: 999px;
+  width: 100%;
+}
+
+.skeleton-list li:nth-child(2) .skeleton-card,
+.skeleton-list li:nth-child(2) .skeleton-meal,
+.lines-skeleton .skeleton-line:nth-child(2) {
+  animation-delay: 0.12s;
+}
+
+.skeleton-list li:nth-child(3) .skeleton-card,
+.skeleton-list li:nth-child(3) .skeleton-meal,
+.lines-skeleton .skeleton-line:nth-child(3) {
+  animation-delay: 0.24s;
+}
+
+.skeleton-list li:nth-child(4) .skeleton-card,
+.skeleton-list li:nth-child(4) .skeleton-meal {
+  animation-delay: 0.36s;
+}
+
 .grid {
   display: grid;
   gap: var(--space-5);
@@ -1192,7 +1281,7 @@ button:disabled {
   color: #1a0c08;
 }
 
-.plate-grid {
+.meal-grid {
   list-style: none;
   padding: 0;
   margin: 0;
@@ -1201,7 +1290,7 @@ button:disabled {
   gap: 0.5rem;
 }
 
-.plate-card {
+.meal-card {
   width: 100%;
   min-height: 4.6rem;
   padding: 0.45rem 0.35rem;
@@ -1218,14 +1307,14 @@ button:disabled {
   font-weight: 600;
 }
 
-.plate-card-name {
+.meal-card-name {
   font-size: 0.72rem;
   font-weight: 700;
   line-height: 1.2;
   text-wrap: balance;
 }
 
-.plate-card .price {
+.meal-card .price {
   font-family: var(--font-mono);
   font-size: 0.68rem;
 }

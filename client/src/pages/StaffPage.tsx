@@ -1,7 +1,10 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { Link } from "react-router-dom";
 import { api, type ApiError } from "../api";
 import type { User } from "../App";
+import { LinesSkeleton } from "../cache/Skeleton";
+import { queryKeys } from "../cache/queryCache";
+import { useApiQuery } from "../cache/useCachedQuery";
 import { PageHead } from "../flow/PageHead";
 import { useSnackbar } from "../snackbar";
 
@@ -30,20 +33,17 @@ type Overview = {
 };
 
 export function StaffPage({ user }: { user: User | null }): ReactElement {
-  const [data, setData] = useState<Overview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { show } = useSnackbar();
+  const { data, loading, reload } = useApiQuery<Overview>(
+    queryKeys.staff,
+    "/v1/staff/overview",
+    { enabled: Boolean(user && user.role === "staff"), uid: user?.id ?? "anon" },
+  );
 
   async function refresh(): Promise<void> {
-    setData(await api<Overview>("/v1/staff/overview"));
+    await reload();
   }
-
-  useEffect(() => {
-    if (!user || user.role !== "staff") return;
-    void refresh().catch((err: unknown) =>
-      setError((err as ApiError).detail),
-    );
-  }, [user]);
 
   if (!user || user.role !== "staff") {
     return (
@@ -148,6 +148,8 @@ export function StaffPage({ user }: { user: User | null }): ReactElement {
             ))}
           </ul>
         </>
+      ) : loading ? (
+        <LinesSkeleton lines={8} label="Loading staff overview" />
       ) : (
         <p className="status">Loading staff overview…</p>
       )}

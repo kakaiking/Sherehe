@@ -2,6 +2,9 @@ import { useEffect, useState, type FormEvent, type ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, formatKsh, type ApiError } from "../api";
 import type { User } from "../App";
+import { ChoiceSkeleton } from "../cache/Skeleton";
+import { PUBLIC_UID, queryKeys } from "../cache/queryCache";
+import { useApiQuery } from "../cache/useCachedQuery";
 import { formatPurchaseWhen } from "../datetime";
 import { continuePath } from "../flow/continue";
 import { persistPayPhone } from "../flow/persistPayPhone";
@@ -55,7 +58,12 @@ export function VendorsPage({
   user: User | null;
   onAuth?: (user: User) => void;
 }): ReactElement {
-  const [packages, setPackages] = useState<Pkg[] | null>(null);
+  const { data, loading } = useApiQuery<{ packages: Pkg[] }>(
+    queryKeys.vendors,
+    "/v1/vendors/packages",
+    { uid: PUBLIC_UID },
+  );
+  const packages = data?.packages ?? null;
   const [category, setCategory] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [notes, setNotes] = useState("");
@@ -67,13 +75,6 @@ export function VendorsPage({
   const { show } = useSnackbar();
   const gate = useAuthGate(user);
   const { step, pick, selectPick, goBack } = usePickStep(user);
-
-  useEffect(() => {
-    void (async () => {
-      const data = await api<{ packages: Pkg[] }>("/v1/vendors/packages");
-      setPackages(data.packages);
-    })();
-  }, []);
 
   useEffect(() => {
     if (!user?.phone) return;
@@ -132,9 +133,9 @@ export function VendorsPage({
       }
     >
       {step === 0 ? (
-        packages === null ? (
-          <p className="status">Loading stall packages…</p>
-        ) : packages.length === 0 ? (
+        loading && packages === null ? (
+          <ChoiceSkeleton count={3} label="Loading stall packages" />
+        ) : packages === null || packages.length === 0 ? (
           <p className="status">No stall packages are listed yet.</p>
         ) : (
           <ChoiceList>

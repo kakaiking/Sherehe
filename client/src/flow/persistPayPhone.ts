@@ -1,5 +1,6 @@
 import { api } from "../api";
 import type { User } from "../App";
+import { SESSION_UID, queryKeys, writeQuery } from "../cache/queryCache";
 import {
   extractKenyanNationalDigits,
   kenyanPhonePayload,
@@ -26,4 +27,5 @@ export async function persistPayPhone(
     body: JSON.stringify({ phone: kenyanPhonePayload(national) }),
   });
   onAuth(user);
+  writeQuery(SESSION_UID, queryKeys.me, user);
 }

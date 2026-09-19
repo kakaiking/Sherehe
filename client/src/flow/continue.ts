@@ -38,7 +38,12 @@ export function afterAuthPath(): string {
   return takeContinue() ?? "/";
 }
 
-export function continuePath(pathname: string, pick: string): string {
-  const params = new URLSearchParams({ pick });
+export function continuePath(
+  pathname: string,
+  pick: string,
+  extra: Record<string, string> = {},
+): string {
+  const params = new URLSearchParams(extra);
+  params.set("pick", pick);
   return `${pathname}?${params.toString()}`;
 }

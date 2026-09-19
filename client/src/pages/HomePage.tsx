@@ -1,6 +1,9 @@
-import { useEffect, useState, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import { Link } from "react-router-dom";
-import { api, formatKsh } from "../api";
+import { formatKsh } from "../api";
+import { HomeSkeleton } from "../cache/Skeleton";
+import { PUBLIC_UID, queryKeys } from "../cache/queryCache";
+import { useApiQuery } from "../cache/useCachedQuery";
 import { useCatalogEvent } from "../eventContext";
 import { WhenWhere } from "../WhenWhere";
 
@@ -12,22 +15,22 @@ type Tickets = {
 
 export function HomePage(): ReactElement {
   const event = useCatalogEvent();
-  const [tickets, setTickets] = useState<Tickets | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { data: tickets, error } = useApiQuery<Tickets>(
+    queryKeys.tickets,
+    "/v1/catalog/tickets",
+    { uid: PUBLIC_UID },
+  );
 
-  useEffect(() => {
-    void (async () => {
-      try {
-        const tk = await api<Tickets>("/v1/catalog/tickets");
-        setTickets(tk);
-      } catch {
-        setError("The event listing is unavailable. Try again shortly.");
-      }
-    })();
-  }, []);
+  if (!tickets) {
+    return error ? (
+      <p className="error">{error}</p>
+    ) : (
+      <HomeSkeleton />
+    );
+  }
 
-  const claimed = tickets?.attendeeCount ?? 0;
-  const target = tickets?.attendeeTarget ?? 200;
+  const claimed = tickets.attendeeCount;
+  const target = tickets.attendeeTarget;
   const heatPct = Math.min(100, Math.round((claimed / Math.max(target, 1)) * 100));
 
   return (
@@ -55,7 +58,7 @@ export function HomePage(): ReactElement {
       <aside className="stub" aria-label="Tonight’s card">
         <strong>On sale now</strong>
         <ul className="menu">
-          {(tickets?.offerings ?? []).slice(0, 6).map((o) => (
+          {tickets.offerings.slice(0, 6).map((o) => (
             <li key={o.code}>
               <span>{o.name}</span>
               <span className="price">{formatKsh(o.priceKsh)}</span>

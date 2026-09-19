@@ -1,6 +1,14 @@
 import { useEffect, useState, type FormEvent, type ReactElement } from "react";
 import { useSearchParams } from "react-router-dom";
 import { api, formatKsh, type ApiError } from "../../api";
+import { GridSkeleton, LinesSkeleton } from "../../cache/Skeleton";
+import {
+  invalidatePrefix,
+  invalidateQuery,
+  queryKeys,
+  writeQuery,
+} from "../../cache/queryCache";
+import { useApiQuery } from "../../cache/useCachedQuery";
 import { PageHead } from "../../flow/PageHead";
 import { formatPurchaseWhen } from "../../datetime";
 import { useSnackbar } from "../../snackbar";
@@ -32,54 +40,53 @@ const emptyForm = {
   stock: 10,
 };
 
-export function VendorShop(): ReactElement {
-  const [products, setProducts] = useState<ShopProduct[]>([]);
-  const [pages, setPages] = useState(1);
+export function VendorShop({ userId }: { userId: string }): ReactElement {
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [editing, setEditing] = useState(false);
-  const [sales, setSales] = useState<SalesPayload | null>(null);
   const [params, setParams] = useSearchParams();
   const { show } = useSnackbar();
   const page = Math.max(1, Number(params.get("page") ?? "1") || 1);
   const sku = params.get("sku") ?? "";
   const adding = params.get("new") === "1";
+  const list = useApiQuery<{ products: ShopProduct[]; pages: number }>(
+    queryKeys.products(page),
+    `/v1/commerce/products?page=${page}`,
+    { enabled: !sku && !adding, uid: userId },
+  );
+  const salesQ = useApiQuery<SalesPayload>(
+    queryKeys.productSales(sku),
+    `/v1/commerce/products/${encodeURIComponent(sku)}/sales`,
+    { enabled: Boolean(sku), uid: userId },
+  );
+  const products = list.data?.products ?? [];
+  const pages = list.data?.pages ?? 1;
+  const sales = salesQ.data ?? null;
 
   async function loadList(): Promise<void> {
-    const data = await api<{ products: ShopProduct[]; pages: number }>(
-      `/v1/commerce/products?page=${page}`,
-    );
-    setProducts(data.products);
-    setPages(data.pages);
+    invalidatePrefix(userId, "commerce:products");
+    await list.reload();
   }
 
   useEffect(() => {
-    if (sku || adding) return;
-    void loadList().catch(() => setError("Could not load your plates."));
-  }, [page, sku, adding]);
+    if (list.error) setError("Could not load your meals.");
+  }, [list.error]);
 
   useEffect(() => {
-    if (!sku) {
-      setSales(null);
-      return;
-    }
-    void (async () => {
-      try {
-        const data = await api<SalesPayload>(`/v1/commerce/products/${sku}/sales`);
-        setSales(data);
-        setForm({
-          name: data.product.name,
-          description: data.product.description,
-          price_ksh: data.product.price_ksh,
-          stock: data.product.stock,
-        });
-        setEditing(false);
-        setError(null);
-      } catch (err) {
-        setError((err as ApiError).detail);
-      }
-    })();
-  }, [sku]);
+    if (!salesQ.data) return;
+    setForm({
+      name: salesQ.data.product.name,
+      description: salesQ.data.product.description,
+      price_ksh: salesQ.data.product.price_ksh,
+      stock: salesQ.data.product.stock,
+    });
+    setEditing(false);
+    setError(null);
+  }, [sku, salesQ.data]);
+
+  useEffect(() => {
+    if (sku && salesQ.error) setError(salesQ.error);
+  }, [sku, salesQ.error]);
 
   function setPage(next: number): void {
     setParams({ page: String(next) }, { replace: true });
@@ -93,7 +100,6 @@ export function VendorShop(): ReactElement {
 
   function closeDetail(): void {
     setParams(page > 1 ? { page: String(page) } : {}, { replace: true });
-    setSales(null);
     setError(null);
   }
 
@@ -105,7 +111,7 @@ export function VendorShop(): ReactElement {
         method: "POST",
         body: JSON.stringify(form),
       });
-      show("Plate added.");
+      show("Meal added.");
       setParams({}, { replace: true });
       await loadList();
     } catch (err) {
@@ -122,20 +128,27 @@ export function VendorShop(): ReactElement {
         method: "PATCH",
         body: JSON.stringify(form),
       });
-      setSales((cur) => (cur ? { ...cur, product: { ...cur.product, ...next } } : cur));
+      if (sales) {
+        writeQuery(userId, queryKeys.productSales(sku), {
+          ...sales,
+          product: { ...sales.product, ...next },
+        });
+      }
+      invalidatePrefix(userId, "commerce:products");
       setEditing(false);
-      show("Plate updated.");
+      show("Meal updated.");
     } catch (err) {
       setError((err as ApiError).detail);
     }
   }
 
-  async function removePlate(): Promise<void> {
+  async function removeMeal(): Promise<void> {
     if (!sku) return;
     setError(null);
     try {
       await api(`/v1/commerce/products/${sku}`, { method: "DELETE" });
-      show("Plate removed.");
+      invalidateQuery(userId, queryKeys.productSales(sku));
+      show("Meal removed.");
       closeDetail();
       await loadList();
     } catch (err) {
@@ -147,16 +160,31 @@ export function VendorShop(): ReactElement {
     return (
       <>
         <PageHead
-          title="Add a plate"
+          title="Add a meal"
           onBack={closeDetail}
         />
-        <PlateForm
+        <MealForm
           form={form}
           onChange={setForm}
           onSubmit={(e) => void saveNew(e)}
-          submitLabel="Add plate"
+          submitLabel="Add meal"
           error={error}
         />
+      </>
+    );
+  }
+
+  if (sku && !sales) {
+    return (
+      <>
+        <PageHead title="Meal" onBack={closeDetail} />
+        {error ? (
+          <p className="error" role="alert">
+            {error}
+          </p>
+        ) : (
+          <LinesSkeleton label="Loading meal sales" />
+        )}
       </>
     );
   }
@@ -171,18 +199,18 @@ export function VendorShop(): ReactElement {
         />
         <p className="actions">
           <button type="button" className="secondary" onClick={() => setEditing((v) => !v)}>
-            {editing ? "Close editor" : "Edit plate"}
+            {editing ? "Close editor" : "Edit meal"}
           </button>
-          <button type="button" className="secondary" onClick={() => void removePlate()}>
-            Delete plate
+          <button type="button" className="secondary" onClick={() => void removeMeal()}>
+            Delete meal
           </button>
         </p>
         {editing ? (
-          <PlateForm
+          <MealForm
             form={form}
             onChange={setForm}
             onSubmit={(e) => void saveEdit(e)}
-            submitLabel="Save plate"
+            submitLabel="Save meal"
             error={error}
           />
         ) : error ? (
@@ -192,7 +220,7 @@ export function VendorShop(): ReactElement {
         ) : null}
         <h2>Purchases</h2>
         {sales.sales.length === 0 ? (
-          <p className="status">Nobody has bought this plate yet.</p>
+          <p className="status">Nobody has bought this meal yet.</p>
         ) : (
           <ul className="menu">
             {sales.sales.map((row) => (
@@ -218,7 +246,7 @@ export function VendorShop(): ReactElement {
 
   return (
     <>
-      <PageHead title="Plates" />
+      <PageHead title="Meals" />
       {error ? (
         <p className="error" role="alert">
           {error}
@@ -226,21 +254,23 @@ export function VendorShop(): ReactElement {
       ) : null}
       <p className="actions">
         <button type="button" onClick={openAdd}>
-          Add a plate
+          Add a meal
         </button>
       </p>
-      {products.length === 0 ? (
-        <p className="status">No plates yet. Add the first one for your stall.</p>
+      {list.loading && products.length === 0 ? (
+        <GridSkeleton label="Loading meals" />
+      ) : products.length === 0 ? (
+        <p className="status">No meals yet. Add the first one for your stall.</p>
       ) : (
-        <ul className="plate-grid">
+        <ul className="meal-grid">
           {products.map((p) => (
             <li key={p.slug}>
               <button
                 type="button"
-                className="plate-card"
+                className="meal-card"
                 onClick={() => setParams({ sku: p.slug }, { replace: true })}
               >
-                <span className="plate-card-name">{p.name}</span>
+                <span className="meal-card-name">{p.name}</span>
                 <span className="price">{formatKsh(p.price_ksh)}</span>
               </button>
             </li>
@@ -248,7 +278,7 @@ export function VendorShop(): ReactElement {
         </ul>
       )}
       {pages > 1 ? (
-        <nav className="page-bar" aria-label="Plate pages">
+        <nav className="page-bar" aria-label="Meal pages">
           {Array.from({ length: pages }, (_, i) => i + 1).map((n) => (
             <button
               key={n}
@@ -265,7 +295,7 @@ export function VendorShop(): ReactElement {
   );
 }
 
-function PlateForm({
+function MealForm({
   form,
   onChange,
   onSubmit,

@@ -2,6 +2,9 @@ import { useEffect, useState, type FormEvent, type ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, formatKsh, type ApiError } from "../api";
 import type { User } from "../App";
+import { ChoiceSkeleton } from "../cache/Skeleton";
+import { PUBLIC_UID, queryKeys } from "../cache/queryCache";
+import { useApiQuery } from "../cache/useCachedQuery";
 import { continuePath } from "../flow/continue";
 import { persistPayPhone } from "../flow/persistPayPhone";
 import { ChoiceList, StepForm } from "../flow/StepForm";
@@ -34,7 +37,12 @@ export function ServicesPage({
   user: User | null;
   onAuth?: (user: User) => void;
 }): ReactElement {
-  const [offerings, setOfferings] = useState<Offering[]>([]);
+  const { data, loading } = useApiQuery<{ offerings: Offering[] }>(
+    queryKeys.services,
+    "/v1/commerce/services",
+    { uid: PUBLIC_UID },
+  );
+  const offerings = data?.offerings ?? [];
   const [eventDate, setEventDate] = useState("");
   const [pax, setPax] = useState(20);
   const [notes, setNotes] = useState("");
@@ -46,13 +54,6 @@ export function ServicesPage({
   const { show } = useSnackbar();
   const gate = useAuthGate(user);
   const { step, pick, selectPick, goBack } = usePickStep(user);
-
-  useEffect(() => {
-    void (async () => {
-      const data = await api<{ offerings: Offering[] }>("/v1/commerce/services");
-      setOfferings(data.offerings);
-    })();
-  }, []);
 
   useEffect(() => {
     if (!user?.phone) return;
@@ -106,6 +107,9 @@ export function ServicesPage({
       }
     >
       {step === 0 ? (
+        loading && offerings.length === 0 ? (
+          <ChoiceSkeleton label="Loading services" />
+        ) : (
         <ChoiceList>
           {offerings.map((o) => (
             <li key={o.slug}>
@@ -121,6 +125,7 @@ export function ServicesPage({
             </li>
           ))}
         </ChoiceList>
+        )
       ) : (
         <form id="service-book" onSubmit={(e) => void submit(e)}>
           <label>

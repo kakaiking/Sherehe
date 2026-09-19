@@ -75,9 +75,9 @@ describe("OrderPage ticket stub", () => {
   });
 });
 
-describe("OrderPage plate receipt", () => {
+describe("OrderPage meal receipt", () => {
   it("is shop step four and downloads the receipt into records", async () => {
-    const paidPlate = {
+    const paidMeal = {
       id: "11111111-2222-3333-4444-555555555555",
       kind: "product",
       status: "paid",
@@ -96,14 +96,14 @@ describe("OrderPage plate receipt", () => {
       }
       return Promise.resolve({
         ok: true,
-        json: async () => paidPlate,
+        json: async () => paidMeal,
       });
     });
     vi.stubGlobal("fetch", fetchMock);
     vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:receipt");
     vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
     render(
-      <MemoryRouter initialEntries={[`/orders/${paidPlate.id}`]}>
+      <MemoryRouter initialEntries={[`/orders/${paidMeal.id}`]}>
         <SnackbarProvider>
           <Routes>
             <Route path="/orders/:id" element={<OrderPage />} />

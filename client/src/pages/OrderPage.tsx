@@ -1,12 +1,15 @@
-import { useEffect, useState, type ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, downloadPdf, formatKsh, type ApiError } from "../api";
+import { downloadPdf, formatKsh, type ApiError } from "../api";
+import { LinesSkeleton } from "../cache/Skeleton";
+import { queryKeys, SESSION_UID } from "../cache/queryCache";
+import { useApiQuery } from "../cache/useCachedQuery";
 import { PageHead } from "../flow/PageHead";
 import { StepForm } from "../flow/StepForm";
 import { TICKET_STEPS } from "../flow/ticketSteps";
 import { ticketLabel } from "../ticketLabel";
 import { WhenWhere } from "../WhenWhere";
-import { SHOP_STEPS } from "./shop/shopSteps";
+import { SHOP_RECEIPT_STEP, SHOP_STEPS } from "./shop/shopSteps";
 
 type Ticket = {
   publicId: string;
@@ -29,33 +32,32 @@ type Order = {
 export function OrderPage(): ReactElement {
   const params = useParams();
   const navigate = useNavigate();
-  const [order, setOrder] = useState<Order | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const id = params["id"] ?? "";
+  const { data: order, error, loading } = useApiQuery<Order>(
+    queryKeys.order(id),
+    `/v1/orders/${id}`,
+    { enabled: Boolean(id), uid: SESSION_UID, freshMs: 0 },
+  );
   const [downloading, setDownloading] = useState(false);
-
-  useEffect(() => {
-    const id = params["id"];
-    if (!id) return;
-    void (async () => {
-      try {
-        setOrder(await api<Order>(`/v1/orders/${id}`));
-      } catch (err) {
-        setError((err as ApiError).detail);
-      }
-    })();
-  }, [params]);
+  const [pdfError, setPdfError] = useState<string | null>(null);
 
   if (!order && error) return <p className="error" role="alert">{error}</p>;
-  if (!order) return <p className="status">Loading order…</p>;
+  if (!order) {
+    return loading ? (
+      <LinesSkeleton lines={6} label="Loading order" />
+    ) : (
+      <p className="status">Loading order…</p>
+    );
+  }
 
   const ticketPaid = order.kind === "tickets" && order.status === "paid";
   const productPaid = order.kind === "product" && order.status === "paid";
-  const plate = order.items[0];
+  const meal = order.items[0];
 
   async function savePdf(): Promise<void> {
     if (!order) return;
     setDownloading(true);
-    setError(null);
+    setPdfError(null);
     try {
       if (order.kind === "product") {
         await downloadPdf(`/v1/orders/${order.id}/receipt.pdf`, "sherehe-receipt.pdf");
@@ -65,7 +67,7 @@ export function OrderPage(): ReactElement {
       await downloadPdf(`/v1/orders/${order.id}/tickets.pdf`, "sherehe-tickets.pdf");
       void navigate("/shop");
     } catch (err) {
-      setError((err as ApiError).detail);
+      setPdfError((err as ApiError).detail);
     } finally {
       setDownloading(false);
     }
@@ -73,9 +75,9 @@ export function OrderPage(): ReactElement {
 
   const body = (
     <>
-      {error ? (
+      {pdfError ? (
         <p className="error" role="alert">
-          {error}
+          {pdfError}
         </p>
       ) : null}
       {order.status === "pending" ? (
@@ -128,7 +130,7 @@ export function OrderPage(): ReactElement {
     return (
       <StepForm
         steps={SHOP_STEPS}
-        step={3}
+        step={SHOP_RECEIPT_STEP}
         footer={
           productPaid ? (
             <button type="button" onClick={() => void savePdf()} disabled={downloading}>
@@ -137,9 +139,9 @@ export function OrderPage(): ReactElement {
           ) : undefined
         }
       >
-        {error ? (
+        {pdfError ? (
           <p className="error" role="alert">
-            {error}
+            {pdfError}
           </p>
         ) : null}
         {order.status === "pending" ? (
@@ -149,7 +151,7 @@ export function OrderPage(): ReactElement {
           </p>
         ) : null}
         <p className="pick-summary">
-          {plate ? `${plate.title} × ${plate.qty}` : "Plate"}
+          {meal ? `${meal.title} × ${meal.qty}` : "Meal"}
         </p>
         <label>
           Amount

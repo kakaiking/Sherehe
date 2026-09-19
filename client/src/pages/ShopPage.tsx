@@ -11,7 +11,7 @@ export function ShopPage({
   onAuth?: (user: User) => void;
 }): ReactElement {
   if (user?.role === "vendor") {
-    return <VendorShop />;
+    return <VendorShop userId={user.id} />;
   }
   return <GuestShop user={user} {...(onAuth ? { onAuth } : {})} />;
 }

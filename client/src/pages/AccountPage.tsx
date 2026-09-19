@@ -1,7 +1,10 @@
-import { useEffect, useState, type ReactElement } from "react";
+import type { ReactElement } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { User } from "../App";
+import { LinesSkeleton } from "../cache/Skeleton";
+import { queryKeys } from "../cache/queryCache";
+import { useApiQuery } from "../cache/useCachedQuery";
 import { formatPurchaseWhen } from "../datetime";
 import { PageHead } from "../flow/PageHead";
 import { formatKenyanMsisdnDisplay } from "../phone";
@@ -31,22 +34,14 @@ export function AccountPage({
   user: User | null;
   onLogout: () => void;
 }): ReactElement {
-  const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [error, setError] = useState<string | null>(null);
   const { show } = useSnackbar();
   const navigate = useNavigate();
-
-  useEffect(() => {
-    if (!user) return;
-    void (async () => {
-      try {
-        const data = await api<{ orders: OrderRow[] }>("/v1/account/orders");
-        setOrders(data.orders);
-      } catch {
-        setError("Could not load history.");
-      }
-    })();
-  }, [user]);
+  const { data, loading, error } = useApiQuery<{ orders: OrderRow[] }>(
+    queryKeys.accountOrders,
+    "/v1/account/orders",
+    { enabled: Boolean(user), uid: user?.id ?? "anon" },
+  );
+  const orders = data?.orders ?? [];
 
   if (!user) {
     return <Navigate to="/login" replace />;
@@ -85,8 +80,10 @@ export function AccountPage({
       </p>
       <h2>Records</h2>
       {error ? <p className="error">{error}</p> : null}
-      {orders.length === 0 ? (
-        <p className="status">No records yet. Buy a ticket or a plate and it lands here.</p>
+      {loading && orders.length === 0 ? (
+        <LinesSkeleton label="Loading records" />
+      ) : orders.length === 0 ? (
+        <p className="status">No records yet. Buy a ticket or a meal and it lands here.</p>
       ) : (
         <ul className="menu">
           {orders.map((o) => (

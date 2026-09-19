@@ -347,7 +347,7 @@ export function ordersRouter(
       );
       const pay = payRows[0] as { receipt: string | null } | undefined;
       const pdf = await productReceiptPdf({
-        title: item?.title ?? "Plate",
+        title: item?.title ?? "Meal",
         qty: Number(item?.qty ?? 1),
         totalKsh: order.total_ksh,
         holderName: stubHolderCaption({

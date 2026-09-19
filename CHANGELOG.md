@@ -4,12 +4,17 @@ All notable changes to Sherehe are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- GET lists (home, tickets, shop, services, vendors, account, orders, staff) paint from a localStorage snapshot and only hit Postgres again when that copy is missing or older than 45 seconds in memory. Cold visits use skeleton placeholders; sign-out keeps the public catalog cache.
+
 ### Fixed
 
 - Production catalog boot no longer re-runs `001_init.sql` after it is applied. That re-run created `account_kind` indexes on the old `sessions`/`orders` tables and crashed every `/v1` request (`FUNCTION_INVOCATION_FAILED`). Indexes on `account_kind` in `001` now no-op if the column is missing; a rejected Vercel boot is retried instead of cached; CI replays the frozen pre-portal schema. The client ignores non-JSON error bodies instead of `JSON.parse` throwing.
 
 ### Changed
 
+- Shop food is **meals**. Guests pick a vendor first, then that stall’s meal grid. Vendor Shop is still CRUD plus buyer records for their own meals.
 - Guests, partners, and vendors each have their own table. Google sign-in on a gate creates or reuses that table’s row, so one email can hold a user id, a partner id, and a vendor id at once.
 
 ### Added
@@ -24,7 +29,7 @@ All notable changes to Sherehe are documented in this file.
 
 ### Added
 
-- Sign-in has a **User / Partner / Vendor** portal toggle. Google creates the account for that gate. Shop on user and partner is a nine-plate food grid with quantity → M-Pesa → PDF receipt; vendor shop is CRUD plus buyer records. Paid plates appear under **Records** on You.
+- Sign-in has a **User / Partner / Vendor** portal toggle. Google creates the account for that gate. Shop on user and partner lists vendors then that stall’s meal grid with quantity → M-Pesa → PDF receipt; vendor shop is CRUD plus buyer records. Paid meals appear under **Records** on You.
 
 ### Removed
 
@@ -38,7 +43,7 @@ All notable changes to Sherehe are documented in this file.
 
 - Google sign-in no longer depends on an OAuth state cookie set on a 302 bounce to Google (Firefox was dropping it as `google_state`). The SPA starts PKCE in sessionStorage; the GET callback hands the code to `/login` and a CSRF-protected POST finishes the exchange.
 
-- Shop checkout no longer crashes (`error is not defined`) after picking a plate.
+- Shop checkout no longer crashes (`error is not defined`) after picking a meal.
 
 ### Changed
 
