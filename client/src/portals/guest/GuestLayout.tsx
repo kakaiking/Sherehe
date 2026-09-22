@@ -22,6 +22,7 @@ export function GuestLayout({
             Home
           </NavLink>
           <NavLink to="/guest/tickets">Tickets</NavLink>
+          <NavLink to="/guest/partners">Partners</NavLink>
           {user ? <NavLink to="/guest/account">You</NavLink> : null}
         </nav>
       }
@@ -40,6 +41,15 @@ export function GuestLayout({
               <path d="M8 7v10M16 7v10" />
             </NavIcon>
             Tickets
+          </NavLink>
+          <NavLink to="/guest/partners">
+            <NavIcon>
+              <path d="M8 14a4 4 0 1 1 0-8 4 4 0 0 1 0 8Z" />
+              <path d="M16 16a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Z" />
+              <path d="M2.5 20c.7-3 2.8-4.8 5.5-4.8S13 17 13.7 20" />
+              <path d="M14 20c.5-2.2 2-3.5 4-3.5s3.5 1.3 4 3.5" />
+            </NavIcon>
+            Partners
           </NavLink>
           {user ? (
             <NavLink to="/guest/account">

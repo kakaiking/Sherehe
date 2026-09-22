@@ -79,7 +79,9 @@ CREATE TABLE IF NOT EXISTS events (
   starts_at TIMESTAMPTZ NOT NULL,
   attendee_target INT NOT NULL DEFAULT 200,
   flash_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  flash_starts_at TIMESTAMPTZ NULL,
   flash_ends_at TIMESTAMPTZ NULL,
+  flash_dates JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 

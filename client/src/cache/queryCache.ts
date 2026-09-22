@@ -7,9 +7,11 @@ export const queryKeys = {
   me: "me",
   event: "catalog:event",
   tickets: "catalog:tickets",
+  catalogPartners: "catalog:partners",
   accountOrders: "account:orders",
   order: (id: string) => `orders:${id}`,
   staff: "staff:overview",
+  staffPartners: "staff:event-partners",
   staffScans: "staff:scans",
 } as const;
 

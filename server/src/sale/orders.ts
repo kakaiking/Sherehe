@@ -12,6 +12,7 @@ import {
   type SalesSnapshot,
   type SaleWindow,
 } from "../sale/engine.js";
+import { normalizeFlashDates } from "../sale/flashDates.js";
 import { signTicketPublicId } from "../tickets/hmac.js";
 import { ticketPassUrl } from "../tickets/passUrl.js";
 import { stubHolderCaption } from "../tickets/holder.js";
@@ -42,7 +43,9 @@ type EventRow = RowDataPacket & {
   id: string;
   attendee_target: number;
   flash_enabled: number;
+  flash_starts_at: Date | null;
   flash_ends_at: Date | null;
+  flash_dates: unknown;
 };
 
 export async function loadEventId(conn: Pool | PoolConnection): Promise<string> {
@@ -98,7 +101,7 @@ export async function loadSnapshot(
   eventId: string,
 ): Promise<SalesSnapshot> {
   const [eventRows] = await conn.query<EventRow[]>(
-    "SELECT id, attendee_target, flash_enabled, flash_ends_at FROM events WHERE id = ? FOR UPDATE",
+    "SELECT id, attendee_target, flash_enabled, flash_starts_at, flash_ends_at, flash_dates FROM events WHERE id = ? FOR UPDATE",
     [eventId],
   );
   const event = eventRows[0];
@@ -126,7 +129,9 @@ export async function loadSnapshot(
   return {
     attendeeCount: await attendeeCount(conn, eventId),
     flashEnabled: Boolean(event.flash_enabled),
+    flashStartsAt: event.flash_starts_at ? new Date(event.flash_starts_at) : null,
     flashEndsAt: event.flash_ends_at ? new Date(event.flash_ends_at) : null,
+    flashDates: normalizeFlashDates(event.flash_dates),
     windows,
     types,
     reservedUnits: await reservedUnits(conn, eventId),

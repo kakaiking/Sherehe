@@ -15,6 +15,7 @@ import { AuthPage } from "./pages/AuthPage";
 import { AccountPage } from "./pages/AccountPage";
 import { HomePage } from "./pages/HomePage";
 import { OrderPage } from "./pages/OrderPage";
+import { PartnersPage } from "./pages/PartnersPage";
 import { PassPage } from "./pages/PassPage";
 import { StaffPage } from "./pages/StaffPage";
 import { TicketsPage } from "./pages/TicketsPage";
@@ -130,9 +131,11 @@ export function App(): ReactElement {
           <Route
             path="/admin"
             element={
-              <PortalChrome brandTo="/admin" brandEvent={false}>
-                <StaffPage user={user} onAuth={setUser} />
-              </PortalChrome>
+              <StaffPage
+                user={user}
+                onAuth={setUser}
+                onLogout={() => setUser(null)}
+              />
             }
           />
           <Route
@@ -149,6 +152,7 @@ export function App(): ReactElement {
               path="tickets"
               element={<TicketsPage user={user} onAuth={setUser} />}
             />
+            <Route path="partners" element={<PartnersPage />} />
             <Route
               path="account"
               element={

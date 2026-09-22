@@ -1,12 +1,16 @@
 import { describe, expect, it } from "vitest";
 import {
   ATTENDEE_TARGET,
+  assertCapacityPool,
   assertCheckout,
   assertPartnerCheckout,
   flashEligible,
   getOfferings,
   stubCountFor,
+  TICKET_CAPACITY_POOL,
+  TICKET_CODES,
   type SalesSnapshot,
+  type TicketCode,
   type TicketType,
 } from "./engine.js";
 
@@ -66,7 +70,9 @@ function snap(over: Partial<SalesSnapshot> = {}): SalesSnapshot {
   return {
     attendeeCount: 0,
     flashEnabled: false,
+    flashStartsAt: null,
     flashEndsAt: null,
+    flashDates: [],
     windows: [
       {
         ticketCode: "early_bird",
@@ -168,6 +174,60 @@ describe("flash sale", () => {
     ).toBe(false);
   });
 
+  it("is not eligible before flashStartsAt and is eligible once the window opens", () => {
+    const starts = new Date("2026-09-24T12:00:00Z");
+    expect(
+      flashEligible(
+        now,
+        snap({
+          flashEnabled: true,
+          flashStartsAt: starts,
+          flashEndsAt: ends,
+        }),
+      ),
+    ).toBe(false);
+    expect(
+      flashEligible(
+        new Date("2026-09-24T12:00:00Z"),
+        snap({
+          flashEnabled: true,
+          flashStartsAt: starts,
+          flashEndsAt: ends,
+        }),
+      ),
+    ).toBe(true);
+  });
+
+  it("is eligible on a selected flash calendar day", () => {
+    expect(
+      flashEligible(
+        now,
+        snap({
+          flashEnabled: true,
+          flashDates: ["2026-09-24"],
+        }),
+      ),
+    ).toBe(true);
+    expect(
+      flashEligible(
+        now,
+        snap({
+          flashEnabled: true,
+          flashDates: ["2026-09-25"],
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("treats a null flashStartsAt as already started", () => {
+    expect(
+      flashEligible(
+        now,
+        snap({ flashEnabled: true, flashStartsAt: null, flashEndsAt: ends }),
+      ),
+    ).toBe(true);
+  });
+
   it("refuses checkout with flash_closed at or above 200 attendees", () => {
     const result = assertCheckout(
       now,
@@ -244,5 +304,51 @@ describe("stubCountFor", () => {
   it("issues one gate stub per unit so a group of five is a single QR", () => {
     expect(stubCountFor(1)).toBe(1);
     expect(stubCountFor(2)).toBe(2);
+  });
+});
+
+describe("assertCapacityPool", () => {
+  const balanced: Record<TicketCode, number> = {
+    early_bird: 125,
+    rush: 50,
+    regular: 25,
+    vip: 20,
+    viip: 20,
+    group: 10,
+    flash: 50,
+  };
+
+  it("accepts the fixed 300 allocation", () => {
+    const r = assertCapacityPool(balanced);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.sum).toBe(TICKET_CAPACITY_POOL);
+  });
+
+  it("rejects a sum that is not the pool", () => {
+    const r = assertCapacityPool({ ...balanced, early_bird: 126 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.reason).toBe("sum_mismatch");
+      expect(r.sum).toBe(301);
+    }
+  });
+
+  it("rejects a missing ticket code", () => {
+    const { early_bird: _drop, ...rest } = balanced;
+    const r = assertCapacityPool(rest);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("incomplete");
+  });
+
+  it("lists every ticket code in the pool", () => {
+    expect(TICKET_CODES).toEqual([
+      "early_bird",
+      "rush",
+      "regular",
+      "vip",
+      "viip",
+      "group",
+      "flash",
+    ]);
   });
 });

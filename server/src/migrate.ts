@@ -100,6 +100,7 @@ export async function migrateAndSeed(): Promise<void> {
       await seed(pool, config);
     }
     await ensureFoodMeals(pool);
+    await ensureEventPartners(pool);
     await pool.query("UPDATE events SET venue = ?, starts_at = ?", [
       EVENT_VENUE,
       EVENT_STARTS_AT,
@@ -115,6 +116,13 @@ export async function migrateAndSeed(): Promise<void> {
     await pool.query(
       "UPDATE ticket_types SET name = 'Group Ticket (5 people)' WHERE code = 'group'",
     );
+    await pool.query("UPDATE ticket_types SET capacity = 125 WHERE code = 'early_bird'");
+    await pool.query("UPDATE ticket_types SET capacity = 50 WHERE code = 'rush'");
+    await pool.query("UPDATE ticket_types SET capacity = 25 WHERE code = 'regular'");
+    await pool.query("UPDATE ticket_types SET capacity = 20 WHERE code = 'vip'");
+    await pool.query("UPDATE ticket_types SET capacity = 20 WHERE code = 'viip'");
+    await pool.query("UPDATE ticket_types SET capacity = 10 WHERE code = 'group'");
+    await pool.query("UPDATE ticket_types SET capacity = 50 WHERE code = 'flash'");
     await syncStaffEmail(pool, config);
     log("info", "migrate_ok", {});
   } finally {
@@ -195,6 +203,123 @@ async function ensureFoodMeals(pool: Pool): Promise<void> {
   }
 }
 
+/** 1×1 PNG — valid logo bytes for seed rows (JPEG/PNG/WebP allowed). */
+const SEED_PARTNER_LOGO_PNG = Buffer.from(
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+  "base64",
+);
+
+const SEED_EVENT_PARTNERS: Array<{
+  name: string;
+  description: string;
+  phone: string;
+  email: string;
+}> = [
+  {
+    name: "Savanna Brew Co",
+    description:
+      "Craft lager and ginger beer on tap for the night — cold crates, local grain, and a crew that knows when to pour.",
+    phone: "254712345670",
+    email: "hello@savannabrew.local",
+  },
+  {
+    name: "Coal & Citrus",
+    description:
+      "Pit-side citrus rubs and charcoal tools for the choma line. They keep the heat honest and the plates moving.",
+    phone: "254712345671",
+    email: "crew@coalandcitrus.local",
+  },
+  {
+    name: "Nairobi Sound Desk",
+    description:
+      "PA, wireless mics, and a tech who stays through last call so the DJ and the host never fight the room.",
+    phone: "254712345672",
+    email: "desk@nairobisound.local",
+  },
+  {
+    name: "Plate Run Logistics",
+    description:
+      "Night runners for ice, cups, and emergency stock between the kitchen, the bar, and the gate.",
+    phone: "254712345673",
+    email: "ops@platerun.local",
+  },
+  {
+    name: "Kachumbari Farms",
+    description:
+      "Tomato, onion, and chilli deliveries timed to the dinner rush — fresh crates, no wilted garnish.",
+    phone: "254712345674",
+    email: "farm@kachumbari.local",
+  },
+  {
+    name: "Ember Print House",
+    description:
+      "Wristbands, menu boards, and stub stock printed the morning of — ink that survives sauce and sweat.",
+    phone: "254712345675",
+    email: "press@emberprint.local",
+  },
+  {
+    name: "Gate Light Co",
+    description:
+      "Warm path lighting and a soft wash on the brand mark so arrivals feel the night before they hear it.",
+    phone: "254712345676",
+    email: "light@gatelight.local",
+  },
+  {
+    name: "Sukuma Secure",
+    description:
+      "Friendly bag check and queue flow at the entrance — calm presence, clear signals, zero drama.",
+    phone: "254712345677",
+    email: "gate@sukumasecure.local",
+  },
+  {
+    name: "Matatu Media",
+    description:
+      "Story clips and stills from the floor — the night’s heat packaged for the morning scroll.",
+    phone: "254712345678",
+    email: "studio@matatumedia.local",
+  },
+  {
+    name: "Walter’s Pantry",
+    description:
+      "Sponsored pantry staples and backup spice for the house kitchen when the rush empties the shelves.",
+    phone: "254712345679",
+    email: "pantry@foodwithwalter.local",
+  },
+];
+
+/** Idempotent demo partners for the guest showcase (by name). */
+async function ensureEventPartners(pool: Pool): Promise<void> {
+  const [eventRows] = await pool.query(
+    "SELECT id FROM events ORDER BY created_at ASC LIMIT 1",
+  );
+  const eventId = (eventRows as Array<{ id: string }>)[0]?.id;
+  if (!eventId) return;
+  for (let i = 0; i < SEED_EVENT_PARTNERS.length; i += 1) {
+    const p = SEED_EVENT_PARTNERS[i]!;
+    const [rows] = await pool.query(
+      "SELECT id FROM event_partners WHERE event_id = ? AND name = ?",
+      [eventId, p.name],
+    );
+    if ((rows as Array<{ id: string }>).length > 0) continue;
+    await pool.query(
+      `INSERT INTO event_partners
+       (id, event_id, name, description, phone, email, logo_mime, logo_data, sort_order)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        randomUUID(),
+        eventId,
+        p.name,
+        p.description,
+        p.phone,
+        p.email,
+        "image/png",
+        SEED_PARTNER_LOGO_PNG,
+        i,
+      ],
+    );
+  }
+}
+
 async function seed(
   pool: Pool,
   config: ReturnType<typeof loadConfig>,
@@ -206,11 +331,11 @@ async function seed(
     [eventId, EVENT_VENUE, EVENT_STARTS_AT],
   );
   const types: Array<[string, string, number, number, number | null, number]> = [
-    ["early_bird", "Early Bird", 2000, 1, 40, 1],
-    ["rush", "Rush Ticket", 2800, 1, 40, 2],
-    ["regular", "Regular Ticket", 3500, 1, 80, 3],
+    ["early_bird", "Early Bird", 2000, 1, 125, 1],
+    ["rush", "Rush Ticket", 2800, 1, 50, 2],
+    ["regular", "Regular Ticket", 3500, 1, 25, 3],
     ["vip", "VIP Ticket", 4500, 1, 20, 4],
-    ["viip", "VIIP Ticket", 5500, 1, 10, 5],
+    ["viip", "VIIP Ticket", 5500, 1, 20, 5],
     ["group", "Group Ticket (5 people)", 13000, 5, 10, 6],
     ["flash", "Flash Sale", 1500, 1, 50, 7],
   ];

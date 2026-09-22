@@ -62,10 +62,10 @@ describe("guest portal dock", () => {
     expect(document.querySelector(".site-header")).toBeNull();
     const dock = screen.getByRole("navigation", { name: "Main" });
     const labels = [...dock.querySelectorAll("a")].map((a) => a.textContent?.trim());
-    expect(labels).toEqual(["Home", "Tickets"]);
+    expect(labels).toEqual(["Home", "Tickets", "Partners"]);
   });
 
-  it("has home and tickets when signed out — no sign-in chrome", () => {
+  it("has home, tickets, and partners when signed out — no sign-in chrome", () => {
     stubFetch();
     render(
       <MemoryRouter initialEntries={["/guest/tickets"]}>
@@ -74,12 +74,12 @@ describe("guest portal dock", () => {
     );
     const dock = screen.getByRole("navigation", { name: "Main" });
     const labels = [...dock.querySelectorAll("a")].map((a) => a.textContent?.trim());
-    expect(labels).toEqual(["Home", "Tickets"]);
+    expect(labels).toEqual(["Home", "Tickets", "Partners"]);
     expect(screen.queryByRole("link", { name: /^sign in$/i })).toBeNull();
     const primary = screen.getByRole("navigation", { name: "Primary" });
     expect(
       [...primary.querySelectorAll("a")].map((a) => a.textContent?.trim()),
-    ).toEqual(["Home", "Tickets"]);
+    ).toEqual(["Home", "Tickets", "Partners"]);
   });
 
   it("hides the main dock on admin portal routes", () => {
@@ -92,7 +92,7 @@ describe("guest portal dock", () => {
     expect(screen.queryByRole("navigation", { name: "Main" })).toBeNull();
   });
 
-  it("keeps the brand on /admin and hides guest primary nav", () => {
+  it("keeps the brand on /admin and hides guest primary nav when signed out", () => {
     stubFetch();
     render(
       <MemoryRouter initialEntries={["/admin"]}>

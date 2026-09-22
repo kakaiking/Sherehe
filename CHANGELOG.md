@@ -6,12 +6,22 @@ All notable changes to Sherehe are documented in this file.
 
 ### Changed
 
+- Admin **Attendees** desk pages buyers **10 at a time** (prev/next + range label), matching scan history.
+- Admin desk headers show only the title (no live clock or subtitle lede under Dashboard / Attendees / Tickets / Partners / Gate scan).
+- Admin dashboard **Scan** card is icon above **Scan** only (no Gate label or “Check in tickets”).
+- Admin **Set flash sale** modal uses a multi-select calendar (tap days to toggle). Each selected day is a flash window from midnight to midnight Nairobi. Close is a red X; unsaved edits prompt Save / Discard. Only **today through 28 Nov 2026** can be set. `POST /v1/staff/flash` takes `{ dates: string[] }`.
+
+### Added
+
+- Guest **Partners** is a stall lineup: ink-bordered logo plaques, Crew kickers, and Call / Email action chips instead of tall band slabs with plain contact links.
+- Admin dashboard **Partners** card is full-width and shows the showcase partner count (like Attendees / Ticket orders).
 - Product is **tickets only**: Guest (`/guest`) and Admin (`/admin`). Partner and Vendor portals, shop, and services are removed from the client; `/v1/partners`, `/v1/vendors`, and `/v1/commerce` are no longer mounted. Session gates are `user` | `admin` only.
-- Guest chrome is Home / Tickets, plus **You** only when signed in. Signed-out visitors see no Sign in in the nav or dock — Google sign-in starts when they pick a ticket. Sign-in is Guest-only (no Partner/Vendor picker). Admin dock is Dashboard / Tickets / Scan.
+- Guest chrome is Home / Tickets / Partners, plus **You** only when signed in. Signed-out visitors see no Sign in in the nav or dock — Google sign-in starts when they pick a ticket. Sign-in is Guest-only (no Partner/Vendor picker). Admin dock is Home / Attendees / Tickets / Partners / Scan / **You** (identity + sign-out, stays on `/admin`).
 - Portals own independent URL trees: `/guest/*` and `/admin`, plus shared `/login`. Bare or unknown paths (`/`, `/shop`, `/tickets`, `/partner`, `/vendor`, …) redirect to `/guest`.
 
 ### Added
 
+- **Event partners showcase** (`event_partners` table): Admin **Partners** desk to add, edit, delete, and reorder partners (name, logo, description, phone, email). Guests browse them at `/guest/partners` in alternating full-width bands. Public `GET /v1/catalog/partners` (+ logo); staff CRUD under `/v1/staff/event-partners`. Distinct from the removed partner ticket-claim portal. Migrate seeds **10 demo partners** when missing (by name).
 - **Gate scan** on admin (`Scan` desk): camera or paste checks a ticket and marks it used. The desk lists **scan history** (recent check-ins). Guest phone-camera scans open `/pass/:id` with a meaningful Valid / Already checked in / Void screen — that page never consumes the pass.
 - Ticket QR codes encode a signed pass URL (`/pass/{publicId}?sig=…`) instead of opaque JSON, so any camera app lands on the pass page.
 ### Fixed

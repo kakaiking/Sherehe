@@ -5,6 +5,7 @@ import { HomeSkeleton } from "../cache/Skeleton";
 import { PUBLIC_UID, queryKeys } from "../cache/queryCache";
 import { useApiQuery } from "../cache/useCachedQuery";
 import { useCatalogEvent } from "../eventContext";
+import { splitOfferingName } from "../offeringName";
 import { WhenWhere } from "../WhenWhere";
 
 type Tickets = {
@@ -58,15 +59,20 @@ export function HomePage(): ReactElement {
       <aside className="stub" aria-label="Tonight’s card">
         <strong>On sale now</strong>
         <ul className="menu">
-          {tickets.offerings.slice(0, 6).map((o) => (
-            <li key={o.code}>
-              <span>{o.name}</span>
-              <span className="price">{formatKsh(o.priceKsh)}</span>
-            </li>
-          ))}
+          {tickets.offerings.slice(0, 6).map((o) => {
+            const { title, note } = splitOfferingName(o.name);
+            return (
+              <li key={o.code}>
+                <span className="menu-name">
+                  {title}
+                  {note ? <span className="menu-note">{note}</span> : null}
+                </span>
+                <span className="price">{formatKsh(o.priceKsh)}</span>
+              </li>
+            );
+          })}
         </ul>
         <div className="tear">
-          <WhenWhere compact />
           <p>COME HUNGRY. LEAVE HAPPY.</p>
           <p>#SAVANNA&amp;SPICE</p>
         </div>

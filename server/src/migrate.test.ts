@@ -66,6 +66,28 @@ describe("migration files stay upgrade-safe", () => {
     expect(src).not.toMatch(/if \(id === ["']001_init["']\)/);
   });
 
+  it("seeds ten named event partners via ensureEventPartners", () => {
+    const src = readFileSync(join(repoRoot, "server/src/migrate.ts"), "utf8");
+    expect(src).toMatch(/await ensureEventPartners\(pool\)/);
+    expect(src).toMatch(/SEED_EVENT_PARTNERS/);
+    const names = [
+      "Savanna Brew Co",
+      "Coal & Citrus",
+      "Nairobi Sound Desk",
+      "Plate Run Logistics",
+      "Kachumbari Farms",
+      "Ember Print House",
+      "Gate Light Co",
+      "Sukuma Secure",
+      "Matatu Media",
+      "Walter’s Pantry",
+    ];
+    for (const name of names) {
+      expect(src).toContain(name);
+    }
+    expect(names).toHaveLength(10);
+  });
+
   it("adds account_kind in 002 before creating indexes on it", () => {
     const sql = readFileSync(join(repoRoot, "db/migrations/002_portal_accounts.sql"), "utf8");
     const add = sql.indexOf("ALTER TABLE sessions ADD COLUMN IF NOT EXISTS account_kind");

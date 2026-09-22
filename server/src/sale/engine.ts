@@ -1,5 +1,9 @@
+import { nairobiDateStr } from "./flashDates.js";
+
 export const ATTENDEE_TARGET = 200;
 export const HOLD_MS = 10 * 60 * 1000;
+/** Fixed inventory pool: sum of all ticket-type capacities must equal this. */
+export const TICKET_CAPACITY_POOL = 300;
 
 export type TicketCode =
   | "early_bird"
@@ -9,6 +13,16 @@ export type TicketCode =
   | "viip"
   | "group"
   | "flash";
+
+export const TICKET_CODES: readonly TicketCode[] = [
+  "early_bird",
+  "rush",
+  "regular",
+  "vip",
+  "viip",
+  "group",
+  "flash",
+] as const;
 
 export type TicketType = {
   code: TicketCode;
@@ -27,7 +41,11 @@ export type SaleWindow = {
 export type SalesSnapshot = {
   attendeeCount: number;
   flashEnabled: boolean;
+  /** When set, flash is not eligible until this instant. Null means already started. */
+  flashStartsAt: Date | null;
   flashEndsAt: Date | null;
+  /** Nairobi calendar days (`YYYY-MM-DD`) when flash is on 00:00–23:59. */
+  flashDates: string[];
   windows: SaleWindow[];
   types: TicketType[];
   /** Units already paid or still on an unexpired hold, keyed by ticket code. */
@@ -52,9 +70,14 @@ function remainingUnits(type: TicketType, reserved: number): number {
 
 export function flashEligible(now: Date, snap: SalesSnapshot): boolean {
   if (!snap.flashEnabled) return false;
-  if (snap.flashEndsAt === null) return false;
-  if (now >= snap.flashEndsAt) return false;
   if (snap.attendeeCount >= ATTENDEE_TARGET) return false;
+  if (snap.flashDates.length > 0) {
+    return snap.flashDates.includes(nairobiDateStr(now));
+  }
+  // Legacy continuous window when no discrete days are stored.
+  if (snap.flashEndsAt === null) return false;
+  if (snap.flashStartsAt !== null && now < snap.flashStartsAt) return false;
+  if (now >= snap.flashEndsAt) return false;
   return true;
 }
 
@@ -151,4 +174,54 @@ export function seatsFor(type: TicketType, qty: number): number {
  */
 export function stubCountFor(qty: number): number {
   return qty;
+}
+
+export type CapacityPoolDenial =
+  | "incomplete"
+  | "invalid"
+  | "sum_mismatch";
+
+/**
+ * Every ticket code must have a non-negative integer capacity, and the
+ * capacities must sum exactly to {@link TICKET_CAPACITY_POOL}.
+ */
+export function assertCapacityPool(
+  capacities: Partial<Record<TicketCode, number>>,
+):
+  | { ok: true; sum: number }
+  | { ok: false; reason: CapacityPoolDenial; sum: number; detail: string } {
+  let sum = 0;
+  for (const code of TICKET_CODES) {
+    const value = capacities[code];
+    if (value === undefined) {
+      return {
+        ok: false,
+        reason: "incomplete",
+        sum,
+        detail: `Missing capacity for ${code}.`,
+      };
+    }
+    if (!Number.isInteger(value) || value < 0) {
+      return {
+        ok: false,
+        reason: "invalid",
+        sum,
+        detail: `Capacity for ${code} must be a whole number of 0 or more.`,
+      };
+    }
+    sum += value;
+  }
+  if (sum !== TICKET_CAPACITY_POOL) {
+    const delta = sum - TICKET_CAPACITY_POOL;
+    return {
+      ok: false,
+      reason: "sum_mismatch",
+      sum,
+      detail:
+        delta > 0
+          ? `Capacities sum to ${sum} (${delta} over the pool of ${TICKET_CAPACITY_POOL}).`
+          : `Capacities sum to ${sum} (${-delta} short of the pool of ${TICKET_CAPACITY_POOL}).`,
+    };
+  }
+  return { ok: true, sum };
 }

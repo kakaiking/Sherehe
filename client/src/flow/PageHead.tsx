@@ -2,10 +2,10 @@ import { type ReactElement, type ReactNode } from "react";
 import { HistoryBackButton } from "./HistoryBackButton";
 
 /**
- * Action row (back + optional trail) with title and/or identity below.
+ * Action row (back + optional trail) with title and/or identity below —
+ * never on the same horizontal line as the back button.
  * Optional `trail` mirrors the back slot on the right (e.g. account sign-out).
- * Omit `title` when the identity byline is enough (e.g. You / account) —
- * name and email then sit under the button row, not beside it.
+ * Omit `title` when the identity byline is enough (e.g. You / account).
  */
 export function PageHead({
   title,
@@ -24,9 +24,9 @@ export function PageHead({
     <header className="page-head">
       <div className="page-head-lead">
         <HistoryBackButton {...(onBack ? { onClick: onBack } : {})} />
-        {title ? <h1>{title}</h1> : null}
         {trail ? <div className="page-head-trail">{trail}</div> : null}
       </div>
+      {title ? <h1>{title}</h1> : null}
       {byline ? (
         title ? (
           <p className="account-name">{byline}</p>
