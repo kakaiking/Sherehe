@@ -1,8 +1,10 @@
-import type { Portal } from "./portal.js";
 import type { UserRole } from "./portal.js";
 
-/** Which identity table a sign-in gate writes and reads. */
-export type AccountKind = Portal;
+/**
+ * Identity table for sessions/orders. Public portals are Guest-only now, but
+ * order rows and legacy sessions may still reference partner/vendor tables.
+ */
+export type AccountKind = "user" | "partner" | "vendor";
 
 export type AccountTable = "users" | "partners" | "vendors";
 

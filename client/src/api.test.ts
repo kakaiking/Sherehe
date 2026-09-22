@@ -49,8 +49,12 @@ describe("api portal header", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     await api<{ ok: boolean }>("/v1/auth/me");
-    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    const headers = new Headers(init.headers);
+    expect(fetchMock).toHaveBeenCalled();
+    const [, init] = fetchMock.mock.calls[0] as unknown as [
+      RequestInfo | URL,
+      RequestInit | undefined,
+    ];
+    const headers = new Headers(init?.headers);
     expect(headers.get(PORTAL_HEADER)).toBe("admin");
   });
 });
@@ -82,8 +86,9 @@ describe("downloadPdf", () => {
     vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
       const el = realCreate(tagName);
       if (tagName === "a") {
-        el.click = () => {
-          clicked.push({ href: el.href, download: el.download });
+        const anchor = el as HTMLAnchorElement;
+        anchor.click = () => {
+          clicked.push({ href: anchor.href, download: anchor.download });
         };
       }
       return el;
