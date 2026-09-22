@@ -31,6 +31,7 @@ type Offering = {
   remainingUnits: number;
 };
 
+/** Guest portal ticket purchase flow. */
 export function TicketsPage({
   user,
   onAuth = () => undefined,
@@ -134,7 +135,7 @@ export function TicketsPage({
       show("Ticket order started. Approve M-Pesa on your phone.");
       const outcome = await waitForPaid(order.orderId);
       if (outcome === "paid") {
-        void navigate(`/orders/${order.orderId}`);
+        void navigate(`/guest/orders/${order.orderId}`);
         return;
       }
       setWaiting(false);
@@ -148,7 +149,7 @@ export function TicketsPage({
   }
 
   function onChoose(o: Offering): void {
-    gate(continuePath("/tickets", o.code), () => {
+    gate(continuePath("/guest/tickets", o.code), () => {
       selectPick(o.code);
     });
   }

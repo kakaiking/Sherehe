@@ -49,7 +49,7 @@ export function HomePage(): ReactElement {
           <div className="heat-fill" style={{ width: `${heatPct}%` }} />
         </div>
         <p className="actions">
-          <Link className="btn" to="/tickets">
+          <Link className="btn" to="/guest/tickets">
             Grab a plate
           </Link>
         </p>
@@ -67,7 +67,8 @@ export function HomePage(): ReactElement {
         </ul>
         <div className="tear">
           <WhenWhere compact />
-          <p>Tear after M-Pesa — the QR is your gate pass.</p>
+          <p>COME HUNGRY. LEAVE HAPPY.</p>
+          <p>#SAVANNA&amp;SPICE</p>
         </div>
       </aside>
     </div>

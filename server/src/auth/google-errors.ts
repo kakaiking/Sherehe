@@ -8,6 +8,7 @@ export const GOOGLE_LOGIN_ERRORS = [
   "google_network",
   "google_session",
   "google_portal",
+  "google_clock",
 ] as const;
 
 export type GoogleLoginError = (typeof GOOGLE_LOGIN_ERRORS)[number];
@@ -28,6 +29,7 @@ export function googleProviderErrorCode(providerError: string): GoogleLoginError
 export function googleCallbackErrorCode(err: unknown): GoogleLoginError {
   const msg = err instanceof Error ? err.message : "";
   if (msg.startsWith("google_fetch:")) return "google_network";
+  if (msg === "clock_skew") return "google_clock";
   return "google";
 }
 

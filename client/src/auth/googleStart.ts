@@ -2,12 +2,15 @@ import type { Portal } from "../portal";
 import { parsePortal } from "../portal";
 
 const PENDING_KEY = "sherehe.oauth";
+const ADMIN_CONFIRM_KEY = "sherehe.adminConfirming";
 const GOOGLE_AUTH = "https://accounts.google.com/o/oauth2/v2/auth";
 
 export type GooglePending = {
   state: string;
   verifier: string;
   portal: Portal;
+  /** Where the SPA should finish OAuth after Google's `/login` handoff. */
+  resume: "login" | "admin";
 };
 
 export type GoogleClientConfig = {
@@ -83,6 +86,9 @@ export function readGooglePending(): GooglePending | null {
     const portal = parsePortal(rec["portal"]);
     const state = rec["state"];
     const verifier = rec["verifier"];
+    const resumeRaw = rec["resume"];
+    const resume =
+      resumeRaw === "admin" || resumeRaw === "login" ? resumeRaw : "login";
     if (
       !portal ||
       typeof state !== "string" ||
@@ -92,7 +98,7 @@ export function readGooglePending(): GooglePending | null {
     ) {
       return null;
     }
-    return { portal, state, verifier };
+    return { portal, state, verifier, resume };
   } catch {
     return null;
   }
@@ -104,6 +110,32 @@ export function clearGooglePending(): void {
   } catch {
     /* private mode */
   }
+}
+
+/** True while admin Google callback is finishing (survives remounts / URL strip). */
+export function setAdminConfirming(on: boolean): void {
+  try {
+    if (on) sessionStorage.setItem(ADMIN_CONFIRM_KEY, "1");
+    else sessionStorage.removeItem(ADMIN_CONFIRM_KEY);
+  } catch {
+    /* private mode */
+  }
+}
+
+export function isAdminConfirming(): boolean {
+  try {
+    return sessionStorage.getItem(ADMIN_CONFIRM_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+/** True when the URL still carries an OAuth code handoff (boot /me must wait). */
+export function hasOauthHandoffParams(
+  search = typeof window !== "undefined" ? window.location.search : "",
+): boolean {
+  const params = new URLSearchParams(search);
+  return Boolean(params.get("code") && params.get("state"));
 }
 
 export function pendingMatches(pending: GooglePending, state: string): boolean {

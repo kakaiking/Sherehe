@@ -101,6 +101,32 @@ export function assertCheckout(
   if (!Number.isInteger(req.qty) || req.qty < 1 || req.qty > 20) {
     return { ok: false, reason: "invalid_qty" };
   }
+  return assertOfferingAvailable(now, snap, req);
+}
+
+/**
+ * Approved partners claim free team tickets once. Quantity is the registered
+ * member count (up to 500). Group packages are excluded — one stub per member.
+ */
+export function assertPartnerCheckout(
+  now: Date,
+  snap: SalesSnapshot,
+  req: CheckoutRequest,
+): { ok: true; offering: Offering } | { ok: false; reason: CheckoutDenial } {
+  if (!Number.isInteger(req.qty) || req.qty < 1 || req.qty > 500) {
+    return { ok: false, reason: "invalid_qty" };
+  }
+  if (req.code === "group") {
+    return { ok: false, reason: "not_on_sale" };
+  }
+  return assertOfferingAvailable(now, snap, req);
+}
+
+function assertOfferingAvailable(
+  now: Date,
+  snap: SalesSnapshot,
+  req: CheckoutRequest,
+): { ok: true; offering: Offering } | { ok: false; reason: CheckoutDenial } {
   const offerings = getOfferings(now, snap);
   const offering = offerings.find((o) => o.code === req.code);
   if (!offering) {

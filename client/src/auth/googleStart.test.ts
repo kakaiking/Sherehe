@@ -2,9 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   clearGooglePending,
   googleAuthorizationUrl,
+  hasOauthHandoffParams,
+  isAdminConfirming,
   pendingMatches,
   readGooglePending,
   s256Challenge,
+  setAdminConfirming,
   storeGooglePending,
 } from "./googleStart";
 
@@ -38,13 +41,52 @@ describe("google pending sessionStorage", () => {
     storeGooglePending({
       state: "s".repeat(64),
       verifier: "v".repeat(43),
-      portal: "vendor",
+      portal: "user",
+      resume: "login",
     });
     const pending = readGooglePending();
-    expect(pending?.portal).toBe("vendor");
+    expect(pending?.portal).toBe("user");
+    expect(pending?.resume).toBe("login");
     expect(pendingMatches(pending!, "s".repeat(64))).toBe(true);
     expect(pendingMatches(pending!, "t".repeat(64))).toBe(false);
     clearGooglePending();
     expect(readGooglePending()).toBeNull();
+  });
+
+  it("round-trips an admin PKCE start", () => {
+    storeGooglePending({
+      state: "b".repeat(64),
+      verifier: "w".repeat(43),
+      portal: "admin",
+      resume: "admin",
+    });
+    expect(readGooglePending()?.portal).toBe("admin");
+    expect(readGooglePending()?.resume).toBe("admin");
+    clearGooglePending();
+  });
+
+  it("defaults resume to login when older pending JSON omits it", () => {
+    sessionStorage.setItem(
+      "sherehe.oauth",
+      JSON.stringify({
+        state: "s".repeat(64),
+        verifier: "v".repeat(43),
+        portal: "user",
+      }),
+    );
+    expect(readGooglePending()?.resume).toBe("login");
+  });
+
+  it("tracks admin confirming across remounts", () => {
+    expect(isAdminConfirming()).toBe(false);
+    setAdminConfirming(true);
+    expect(isAdminConfirming()).toBe(true);
+    setAdminConfirming(false);
+    expect(isAdminConfirming()).toBe(false);
+  });
+
+  it("detects OAuth handoff query params", () => {
+    expect(hasOauthHandoffParams("?code=abc&state=xyz")).toBe(true);
+    expect(hasOauthHandoffParams("?error=google")).toBe(false);
   });
 });

@@ -4,9 +4,10 @@ import { randomUUID } from "node:crypto";
 import type { Pool, RowDataPacket } from "../db.js";
 import type { Config } from "../config.js";
 import type { StkClient } from "../mpesa/client.js";
-import { requireUser } from "../auth/session.js";
+import { requireUser, requirePartner } from "../auth/session.js";
 import {
   createTicketOrder,
+  createPartnerFreeTicketOrder,
   fulfillPaidOrder,
   markTicketStubDownloaded,
   ticketsForOrder,
@@ -42,6 +43,24 @@ const checkoutErrors: Record<string, { status: number; detail: string }> = {
     detail: "The flash sale is closed. Remaining tickets are at regular or premium prices.",
   },
   invalid_qty: { status: 422, detail: "Choose between 1 and 20 packages." },
+};
+
+const partnerTicketErrors: Record<string, { status: number; detail: string }> = {
+  partner_not_confirmed: {
+    status: 403,
+    detail: "Partner registration must be approved before claiming free tickets.",
+  },
+  partner_already_claimed: {
+    status: 409,
+    detail: "Your team already claimed free tickets. Download the PDF from Tickets.",
+  },
+  not_on_sale: { status: 409, detail: "That ticket is not on sale right now." },
+  sold_out: { status: 409, detail: "Not enough tickets left for your full team." },
+  flash_closed: {
+    status: 409,
+    detail: "The flash sale is closed.",
+  },
+  invalid_qty: { status: 422, detail: "Team size on your registration is invalid." },
 };
 
 type PaymentRow = {
@@ -156,6 +175,15 @@ export function ordersRouter(
       }
       const user = req.user;
       if (!user) return;
+      if (user.role === "partner") {
+        res.status(403).json({
+          type: "https://httpstatuses.com/403",
+          title: "Forbidden",
+          status: 403,
+          detail: "Partners claim free team tickets from the partner tickets flow.",
+        });
+        return;
+      }
       const payPhone = stkPhone(user.phone);
       if (!payPhone) {
         res.status(422).json({
@@ -242,6 +270,69 @@ export function ordersRouter(
     }
   });
 
+  const PartnerTicketBody = z.object({
+    code: z.enum([
+      "early_bird",
+      "rush",
+      "regular",
+      "vip",
+      "viip",
+      "flash",
+    ]),
+  });
+
+  r.post("/partner-tickets", requirePartner, async (req, res, next) => {
+    try {
+      const parsed = PartnerTicketBody.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(422).json({
+          type: "https://httpstatuses.com/422",
+          title: "Unprocessable Entity",
+          status: 422,
+          detail: "Choose a ticket type for your team.",
+        });
+        return;
+      }
+      const user = req.user;
+      if (!user) return;
+      let created;
+      try {
+        created = await createPartnerFreeTicketOrder(
+          pool,
+          user.id,
+          parsed.data.code as TicketCode,
+          config.TICKET_SIGNING_SECRET,
+        );
+      } catch (err) {
+        const name = (err as Error).message;
+        const mapped = partnerTicketErrors[name];
+        if (mapped) {
+          res.status(mapped.status).json({
+            type: `https://httpstatuses.com/${mapped.status}`,
+            title:
+              mapped.status === 403
+                ? "Forbidden"
+                : mapped.status === 422
+                  ? "Unprocessable Entity"
+                  : "Conflict",
+            status: mapped.status,
+            detail: mapped.detail,
+          });
+          return;
+        }
+        throw err;
+      }
+      res.status(201).json({
+        orderId: created.orderId,
+        qty: created.qty,
+        totalKsh: 0,
+        free: true,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   r.get("/:id/tickets.pdf", requireUser, async (req, res, next) => {
     try {
       const user = req.user;
@@ -279,6 +370,7 @@ export function ordersRouter(
         pool,
         order.id,
         config.TICKET_SIGNING_SECRET,
+        config.CLIENT_ORIGIN,
       );
       await markTicketStubDownloaded(pool, order.id);
       const [eventRows] = await pool.query<RowDataPacket[]>(
@@ -464,7 +556,12 @@ export function ordersRouter(
       const pay = payRows[0] as { status: string; receipt: string | null } | undefined;
       const tickets =
         order.status === "paid" && order.kind === "tickets"
-          ? await ticketsForOrder(pool, order.id, config.TICKET_SIGNING_SECRET)
+          ? await ticketsForOrder(
+              pool,
+              order.id,
+              config.TICKET_SIGNING_SECRET,
+              config.CLIENT_ORIGIN,
+            )
           : [];
       res.json({
         id: order.id,

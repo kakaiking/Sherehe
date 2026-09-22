@@ -29,11 +29,28 @@ describe("SnackbarProvider", () => {
       screen.getByRole("button", { name: "Fire" }).click();
     });
     const note = screen.getByRole("status");
-    expect(note.textContent).toBe("Ticket order started.");
+    expect(note.textContent).toContain("Ticket order started.");
     expect(note.className).toContain("snackbar-ok");
     expect(note.parentElement?.className).toBe("snackbar-host");
+    expect(screen.getByRole("button", { name: "Dismiss" })).toBeTruthy();
     act(() => {
       vi.advanceTimersByTime(3800);
+    });
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("dismisses when the close button is pressed", () => {
+    render(
+      <SnackbarProvider>
+        <Probe />
+      </SnackbarProvider>,
+    );
+    act(() => {
+      screen.getByRole("button", { name: "Fire" }).click();
+    });
+    expect(screen.getByRole("status")).toBeTruthy();
+    act(() => {
+      screen.getByRole("button", { name: "Dismiss" }).click();
     });
     expect(screen.queryByRole("status")).toBeNull();
   });

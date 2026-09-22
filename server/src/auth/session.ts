@@ -4,10 +4,17 @@ import type { Pool } from "../db.js";
 import type { Config } from "../config.js";
 import type { AccountKind } from "./accounts.js";
 import { ORDER_BUYER_EMAIL } from "./accounts.js";
+import {
+  dbAccountKind,
+  parseSessionKind,
+  type SessionKind,
+} from "./portal.js";
 
-const SESSION_COOKIE = "sherehe_sid";
+/** Legacy single-cookie name; cleared on create/destroy so old tabs cannot fight. */
+export const LEGACY_SESSION_COOKIE = "sherehe_sid";
 const CSRF_COOKIE = "sherehe_csrf";
 const SESSION_MS = 7 * 24 * 60 * 60 * 1000;
+const PORTAL_HEADER = "x-sherehe-portal";
 
 export type SessionUser = {
   id: string;
@@ -24,8 +31,13 @@ declare global {
     interface Request {
       user?: SessionUser;
       csrfToken?: string;
+      portal?: SessionKind;
     }
   }
+}
+
+export function sessionCookieName(kind: SessionKind): string {
+  return `sherehe_sid_${kind}`;
 }
 
 function cookieOpts(config: Config): {
@@ -44,20 +56,53 @@ function cookieOpts(config: Config): {
   };
 }
 
+function clearLegacyCookie(res: Response, config: Config): void {
+  res.clearCookie(LEGACY_SESSION_COOKIE, { ...cookieOpts(config), maxAge: 0 });
+}
+
+/**
+ * Pick which portal cookie to load: explicit header wins; otherwise the sole
+ * present cookie; if several exist, prefer user (never auto-pick admin).
+ */
+export function resolveSessionPortal(
+  cookies: Record<string, string | undefined>,
+  headerRaw: string | undefined,
+): SessionKind {
+  const fromHeader = parseSessionKind(headerRaw);
+  if (fromHeader) return fromHeader;
+
+  const present = (["user", "admin"] as const).filter(
+    (k) => Boolean(cookies[sessionCookieName(k)]),
+  );
+  if (present.length === 1) return present[0]!;
+  const guest = present.filter((k) => k !== "admin");
+  if (guest.length === 1) return guest[0]!;
+  return "user";
+}
+
 export async function createSession(
   pool: Pool,
   res: Response,
   config: Config,
   userId: string,
-  kind: AccountKind = "user",
+  kind: SessionKind = "user",
+  req?: Request,
 ): Promise<void> {
+  const cookies = (req?.cookies ?? {}) as Record<string, string | undefined>;
+  const name = sessionCookieName(kind);
+  const previous = cookies[name];
+  if (previous) {
+    await pool.query("DELETE FROM sessions WHERE id = ?", [previous]);
+  }
   const id = randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + SESSION_MS);
+  const accountKind = dbAccountKind(kind);
   await pool.query(
     "INSERT INTO sessions (id, account_kind, user_id, expires_at) VALUES (?, ?, ?, ?)",
-    [id, kind, userId, expires],
+    [id, accountKind, userId, expires],
   );
-  res.cookie(SESSION_COOKIE, id, cookieOpts(config));
+  res.cookie(name, id, cookieOpts(config));
+  clearLegacyCookie(res, config);
 }
 
 export async function destroySession(
@@ -65,13 +110,20 @@ export async function destroySession(
   req: Request,
   res: Response,
   config: Config,
+  kind?: SessionKind,
 ): Promise<void> {
   const cookies = req.cookies as Record<string, string | undefined>;
-  const sid = cookies[SESSION_COOKIE];
+  const portal =
+    kind ??
+    req.portal ??
+    resolveSessionPortal(cookies, req.get(PORTAL_HEADER) ?? undefined);
+  const name = sessionCookieName(portal);
+  const sid = cookies[name] ?? cookies[LEGACY_SESSION_COOKIE];
   if (sid) {
     await pool.query("DELETE FROM sessions WHERE id = ?", [sid]);
   }
-  res.clearCookie(SESSION_COOKIE, { ...cookieOpts(config), maxAge: 0 });
+  res.clearCookie(name, { ...cookieOpts(config), maxAge: 0 });
+  clearLegacyCookie(res, config);
 }
 
 export function csrfMiddleware(config: Config) {
@@ -119,7 +171,13 @@ export function loadUser(pool: Pool) {
   ): Promise<void> => {
     try {
       const cookies = req.cookies as Record<string, string | undefined>;
-  const sid = cookies[SESSION_COOKIE];
+      const portal = resolveSessionPortal(
+        cookies,
+        req.get(PORTAL_HEADER) ?? undefined,
+      );
+      req.portal = portal;
+      const sid =
+        cookies[sessionCookieName(portal)] ?? cookies[LEGACY_SESSION_COOKIE];
       if (!sid) {
         next();
         return;
@@ -169,7 +227,7 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
 }
 
 export function requireStaff(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user || req.user.role !== "staff") {
+  if (!req.user || req.user.role !== "staff" || req.portal !== "admin") {
     res.status(403).json({
       type: "https://httpstatuses.com/403",
       title: "Forbidden",

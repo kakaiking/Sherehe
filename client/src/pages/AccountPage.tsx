@@ -7,7 +7,6 @@ import { queryKeys } from "../cache/queryCache";
 import { useApiQuery } from "../cache/useCachedQuery";
 import { formatPurchaseWhen } from "../datetime";
 import { PageHead } from "../flow/PageHead";
-import { formatKenyanMsisdnDisplay } from "../phone";
 import { useSnackbar } from "../snackbar";
 
 type OrderRow = {
@@ -25,6 +24,21 @@ type OrderRow = {
 function historyLabel(o: OrderRow): string {
   const name = o.title;
   return Number(o.qty) > 1 ? `${name} × ${o.qty}` : name;
+}
+
+function SignOutIcon(): ReactElement {
+  return (
+    <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+      <path
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M10 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h4M16 16l4-4-4-4M20 12H10"
+      />
+    </svg>
+  );
 }
 
 export function AccountPage({
@@ -49,46 +63,39 @@ export function AccountPage({
 
   async function logout(): Promise<void> {
     await api("/v1/auth/logout", { method: "POST" });
-    onLogout();
     show("Signed out.");
-    void navigate("/login", { replace: true });
+    // Leave /guest/account before clearing user so the signed-out
+    // <Navigate to="/login" /> guard does not win the race.
+    void navigate("/guest", { replace: true });
+    onLogout();
   }
 
   return (
     <>
       <PageHead
-        title="You"
         byline={user.displayName ?? undefined}
-        lede={
-          <>
-            {user.email}
-            {user.phone
-              ? ` · ${formatKenyanMsisdnDisplay(user.phone)}`
-              : ""}
-          </>
+        lede={user.email}
+        trail={
+          <button
+            type="button"
+            className="sign-out-icon"
+            aria-label="Sign out"
+            onClick={() => void logout()}
+          >
+            <SignOutIcon />
+          </button>
         }
       />
-      <p className="actions">
-        <button type="button" className="secondary" onClick={() => void logout()}>
-          Sign out
-        </button>
-        {user.role === "staff" ? (
-          <Link className="btn secondary" to="/staff">
-            Staff
-          </Link>
-        ) : null}
-      </p>
-      <h2>Records</h2>
       {error ? <p className="error">{error}</p> : null}
       {loading && orders.length === 0 ? (
         <LinesSkeleton label="Loading records" />
       ) : orders.length === 0 ? (
-        <p className="status">No records yet. Buy a ticket or a meal and it lands here.</p>
+        <p className="status">No records yet. Buy a ticket and it lands here.</p>
       ) : (
         <ul className="menu">
           {orders.map((o) => (
             <li key={`${o.id}-${o.sku_code ?? o.kind}`}>
-              <Link to={`/orders/${o.id}`}>
+              <Link to={`/guest/orders/${o.id}`}>
                 <span className="history-ticket">{historyLabel(o)}</span>
                 <span className="history-when">{formatPurchaseWhen(o.occurred_at)}</span>
               </Link>

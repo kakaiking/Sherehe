@@ -7,15 +7,10 @@ export const queryKeys = {
   me: "me",
   event: "catalog:event",
   tickets: "catalog:tickets",
-  products: (page: number, stallId = "") =>
-    stallId ? `commerce:products:${stallId}:${page}` : `commerce:products:${page}`,
-  stalls: "commerce:stalls",
-  services: "commerce:services",
-  vendors: "vendors:packages",
   accountOrders: "account:orders",
   order: (id: string) => `orders:${id}`,
   staff: "staff:overview",
-  productSales: (sku: string) => `commerce:sales:${sku}`,
+  staffScans: "staff:scans",
 } as const;
 
 export const PUBLIC_UID = "anon";
@@ -209,7 +204,7 @@ export function invalidatePrefix(uid: string, prefix: string): void {
 
 /**
  * Drop session and per-user GET snapshots. Public catalog rows stay so
- * Home / Tickets / Shop do not flash skeletons after sign-out.
+ * Home / Tickets do not flash skeletons after sign-out.
  */
 export function resetPrivateCache(): void {
   const uid = cacheUid;

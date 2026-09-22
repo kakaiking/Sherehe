@@ -1,3 +1,5 @@
+import { PORTAL_HEADER, readStoredPortal } from "./portal";
+
 export type ApiError = {
   status: number;
   detail: string;
@@ -45,9 +47,20 @@ async function readError(res: Response): Promise<ApiError> {
   return { status: res.status, detail: "Request failed." };
 }
 
+function withPortalHeaders(init: RequestInit = {}): Headers {
+  const headers = new Headers(init.headers);
+  if (!headers.has(PORTAL_HEADER)) {
+    headers.set(PORTAL_HEADER, readStoredPortal());
+  }
+  return headers;
+}
+
 export async function ensureCsrf(): Promise<string> {
   if (csrf) return csrf;
-  const res = await fetch("/v1/auth/csrf", { credentials: "include" });
+  const res = await fetch("/v1/auth/csrf", {
+    credentials: "include",
+    headers: withPortalHeaders(),
+  });
   const body: unknown = await parseJsonBody(res);
   if (
     typeof body === "object" &&
@@ -65,7 +78,7 @@ export async function api<T>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
-  const headers = new Headers(init.headers);
+  const headers = withPortalHeaders(init);
   if (init.method && init.method !== "GET") {
     headers.set("x-csrf-token", await ensureCsrf());
     if (!headers.has("content-type") && init.body) {
@@ -90,27 +103,35 @@ export async function api<T>(
   return body as T;
 }
 
+/**
+ * Fetch a PDF and trigger a file download without navigating the SPA
+ * (or opening the browser's PDF viewer as a page).
+ */
 export async function downloadPdf(
   path: string,
   filename: string,
 ): Promise<void> {
-  const res = await fetch(path, { credentials: "include" });
+  const res = await fetch(path, {
+    credentials: "include",
+    headers: withPortalHeaders(),
+  });
   if (!res.ok) {
     throw await readError(res);
   }
-  const blob = await res.blob();
+  const raw = await res.blob();
+  // octet-stream + download= keeps Chromium from swapping the tab for a PDF preview.
+  const blob = new Blob([raw], { type: "application/octet-stream" });
   const url = URL.createObjectURL(blob);
-  try {
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    a.rel = "noopener";
-    document.body.append(a);
-    a.click();
-    a.remove();
-  } finally {
-    URL.revokeObjectURL(url);
-  }
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.rel = "noopener";
+  a.style.display = "none";
+  document.body.append(a);
+  a.click();
+  a.remove();
+  // Revoke after the browser has a chance to start the save dialog.
+  window.setTimeout(() => URL.revokeObjectURL(url), 2_000);
 }
 
 export function formatKsh(n: number): string {

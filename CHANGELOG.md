@@ -4,35 +4,49 @@ All notable changes to Sherehe are documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Product is **tickets only**: Guest (`/guest`) and Admin (`/admin`). Partner and Vendor portals, shop, and services are removed from the client; `/v1/partners`, `/v1/vendors`, and `/v1/commerce` are no longer mounted. Session gates are `user` | `admin` only.
+- Guest chrome is Home / Tickets, plus **You** only when signed in. Signed-out visitors see no Sign in in the nav or dock — Google sign-in starts when they pick a ticket. Sign-in is Guest-only (no Partner/Vendor picker). Admin dock is Dashboard / Tickets / Scan.
+- Portals own independent URL trees: `/guest/*` and `/admin`, plus shared `/login`. Bare or unknown paths (`/`, `/shop`, `/tickets`, `/partner`, `/vendor`, …) redirect to `/guest`.
+
 ### Added
 
-- GET lists (home, tickets, shop, services, vendors, account, orders, staff) paint from a localStorage snapshot and only hit Postgres again when that copy is missing or older than 45 seconds in memory. Cold visits use skeleton placeholders; sign-out keeps the public catalog cache.
+- **Gate scan** on admin (`Scan` desk): camera or paste checks a ticket and marks it used. The desk lists **scan history** (recent check-ins). Guest phone-camera scans open `/pass/:id` with a meaningful Valid / Already checked in / Void screen — that page never consumes the pass.
+- Ticket QR codes encode a signed pass URL (`/pass/{publicId}?sig=…`) instead of opaque JSON, so any camera app lands on the pass page.
+### Fixed
+
+- `./start.sh` opens `/guest` (bare `/` also lands there via redirect).
+- Google sign-in no longer fails with a generic error when the API host clock is hours ahead of real time. id_token expiry uses Google's HTTP `Date`, and a drifted clock surfaces a clear “fix the date and time” message instead of “did not complete.”
+- User-gate Google return no longer paints “Confirming admin access…” — that shell only shows when PKCE was started from `/admin`. Sticky admin confirming is cleared when starting a guest Google sign-in.
+- Admin has its own session cookie (`sherehe_sid_admin`). Signing in on `/admin` no longer owns guest You/Home; leaving admin resets the active gate to Guest. Staff API routes require the admin cookie.
+- Admin brand and back control stay on `/admin` (no jump to guest Home / You). Guest desktop nav is hidden on the admin portal.
+
+### Changed
+
+- Sign-in gate label **User** is now **Guest**. Wire id stays `user` (cookie `sherehe_sid_user`, `account_kind`).
+- Site brand (Sherehe + when/where) is centered in the header on every page; page titles stay centered with the back control overlaid on the left.
+- Admin is reached only by opening `/admin` (no Admin shortcut from Guest You or other portals).
+- Admin **Ticket orders** opens a buyers-only list. Flash sale and product stock stay on the **Event** desk, opened from the Attendees card (not a dock tab).
 
 ### Fixed
 
 - Production catalog boot no longer re-runs `001_init.sql` after it is applied. That re-run created `account_kind` indexes on the old `sessions`/`orders` tables and crashed every `/v1` request (`FUNCTION_INVOCATION_FAILED`). Indexes on `account_kind` in `001` now no-op if the column is missing; a rejected Vercel boot is retried instead of cached; CI replays the frozen pre-portal schema. The client ignores non-JSON error bodies instead of `JSON.parse` throwing.
 
-### Changed
-
-- Shop food is **meals**. Guests pick a vendor first, then that stall’s meal grid. Vendor Shop is still CRUD plus buyer records for their own meals.
-- Guests, partners, and vendors each have their own table. Google sign-in on a gate creates or reuses that table’s row, so one email can hold a user id, a partner id, and a vendor id at once.
-
 ### Added
 
+- GET lists (home, tickets, account, orders, staff) paint from a localStorage snapshot and only hit Postgres again when that copy is missing or older than 45 seconds in memory. Cold visits use skeleton placeholders; sign-out keeps the public catalog cache.
 - `./push.sh "commit message"` stages the tree, commits, pushes `origin`, and deploys Vercel production.
 - Tab icon is a tight beer-pong cup mark drawn to read at 16px (`/favicon.svg`, plus PNG/ICO fallbacks).
 
 ### Changed
 
-- The Kenyan mobile is entered on **Receive Prompt** (tickets, shop, vendor apply, service book), not on a post-Google **Your mobile** page. Google sign-in continues even when the account has no number yet.
+- The Kenyan mobile is entered on **Receive Prompt** (tickets), not on a post-Google **Your mobile** page. Google sign-in continues even when the account has no number yet.
 - Persistence is **Postgres** (Neon in production, Compose locally on host port **5433**). Hosting target is **Vercel** (static client + `/api` Express). **Upstash Redis** is required in production for rate limits and migrate locks.
-
-### Added
-
-- Sign-in has a **User / Partner / Vendor** portal toggle. Google creates the account for that gate. Shop on user and partner lists vendors then that stall’s meal grid with quantity → M-Pesa → PDF receipt; vendor shop is CRUD plus buyer records. Paid meals appear under **Records** on You.
 
 ### Removed
 
+- Partner and Vendor portals, guest shop, vendor stall CRUD, partner registration, and free partner ticket claims from the product surface.
 - The dock **More** sheet (Partners / Vendors).
 
 ### Fixed
@@ -53,7 +67,7 @@ All notable changes to Sherehe are documented in this file.
 ### Added
 
 - Google sign-in requests the profile scope and stores the guest's name. The account page shows that name above email and phone. Each stub writes the buyer name on the dashed line under the QR (`{first name}'s group` on a group pass).
-- Downloading a paid ticket PDF stamps `stub_downloaded_at` on the order. A later **Receive Prompt** asks **Are you sure you want another ticket?** before a second STK. After the PDF download starts, checkout opens **Shop**.
+- Downloading a paid ticket PDF stamps `stub_downloaded_at` on the order. A later **Receive Prompt** asks **Are you sure you want another ticket?** before a second STK. Checkout opens **Shop** immediately; the PDF saves in the background and a success snackbar confirms it there.
 - Ticket checkout is four steps: pick, quantity, pay with M-Pesa (Daraja STK Push to the number entered on **Receive Prompt**), then download a charcoal pit PDF stub (wordmark, pass name, QR — no order ids on the face). Live Daraja uses a cached OAuth token, STK Query polling, Nairobi timestamps, and refuses to start without HTTPS callback credentials.
 
 ### Fixed
@@ -68,7 +82,7 @@ All notable changes to Sherehe are documented in this file.
 - Ticket quantity step footer is **Pay** (then **Receive Prompt** on the M-Pesa step).
 - Ticket pay no longer asks to confirm the saved M-Pesa number; the footer is **Receive Prompt**.
 - Successful sign-in lands on **Home** unless a checkout pick is saved to resume. Completed sign-in, sign-out, phone save, checkout, partner registration, and staff reviews show a snackbar under the site header.
-- Sign out leaves **Account** for the **Sign in** screen (no signed-out holding page).
+- Sign out leaves **Account** for guest **Home** (not the Sign in screen).
 
 - Kenyan mobile fields lock **+254** as a prefix chip, space the remaining 9 digits as `712 345 678`, and refuse extra digits.
 

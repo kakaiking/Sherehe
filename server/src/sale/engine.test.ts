@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   ATTENDEE_TARGET,
   assertCheckout,
+  assertPartnerCheckout,
   flashEligible,
   getOfferings,
   stubCountFor,
@@ -215,6 +216,27 @@ describe("assertCheckout", () => {
     const r = assertCheckout(now, snap(), { code: "rush", qty: 1 });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toBe("not_on_sale");
+  });
+});
+
+describe("assertPartnerCheckout", () => {
+  const now = new Date("2026-09-18T10:00:00Z");
+
+  it("allows team-sized qty above the guest max of 20", () => {
+    const r = assertPartnerCheckout(now, snap(), { code: "regular", qty: 25 });
+    expect(r.ok).toBe(true);
+  });
+
+  it("rejects group packages for partner free claims", () => {
+    const r = assertPartnerCheckout(now, snap(), { code: "group", qty: 2 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("not_on_sale");
+  });
+
+  it("rejects qty above 500", () => {
+    const r = assertPartnerCheckout(now, snap(), { code: "regular", qty: 501 });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toBe("invalid_qty");
   });
 });
 

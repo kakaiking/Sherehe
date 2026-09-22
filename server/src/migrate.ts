@@ -115,9 +115,45 @@ export async function migrateAndSeed(): Promise<void> {
     await pool.query(
       "UPDATE ticket_types SET name = 'Group Ticket (5 people)' WHERE code = 'group'",
     );
+    await syncStaffEmail(pool, config);
     log("info", "migrate_ok", {});
   } finally {
     await pool.end();
+  }
+}
+
+/** Keep exactly STAFF_EMAIL as staff; demote any other staff rows. */
+async function syncStaffEmail(pool: Pool, config: ReturnType<typeof loadConfig>): Promise<void> {
+  if (!config.STAFF_EMAIL) return;
+  const email = config.STAFF_EMAIL.toLowerCase();
+  await pool.query(
+    "UPDATE users SET role = 'customer' WHERE role = 'staff' AND email <> ?",
+    [email],
+  );
+  const [rows] = await pool.query("SELECT id FROM users WHERE email = ?", [email]);
+  if ((rows as Array<{ id: string }>).length > 0) {
+    await pool.query("UPDATE users SET role = 'staff' WHERE email = ?", [email]);
+    return;
+  }
+  if (config.STAFF_PHONE) {
+    const [byPhone] = await pool.query("SELECT id FROM users WHERE phone = ?", [
+      config.STAFF_PHONE,
+    ]);
+    const phoneRow = (byPhone as Array<{ id: string }>)[0];
+    if (phoneRow) {
+      await pool.query("UPDATE users SET email = ?, role = 'staff' WHERE id = ?", [
+        email,
+        phoneRow.id,
+      ]);
+      return;
+    }
+  }
+  if (config.STAFF_PASSWORD && config.STAFF_PHONE) {
+    const hash = await hashPassword(config.STAFF_PASSWORD);
+    await pool.query(
+      "INSERT INTO users (id, email, phone, password_hash, role) VALUES (?, ?, ?, ?, 'staff')",
+      [randomUUID(), email, config.STAFF_PHONE, hash],
+    );
   }
 }
 

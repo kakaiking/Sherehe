@@ -5,6 +5,7 @@ import {
 } from "node:crypto";
 import { setDefaultResultOrder } from "node:dns";
 import { z } from "zod";
+import { log } from "../log.js";
 import { sanitizeDisplayName, sanitizeGivenName } from "../tickets/holder.js";
 
 // Node 18+ / some VPNs fail IPv6 to Google first; prefer A records.
@@ -15,7 +16,30 @@ const GOOGLE_TOKEN = "https://oauth2.googleapis.com/token";
 const GOOGLE_JWKS = "https://www.googleapis.com/oauth2/v3/certs";
 const ISSUERS = new Set(["https://accounts.google.com", "accounts.google.com"]);
 const SKEW_MS = 60_000;
+/** Warn / prefer network time when local clock drifts beyond this. */
+const CLOCK_WARN_MS = 120_000;
 const TOKEN_MAX = 8192;
+
+/** Parses an HTTP Date header to epoch ms. Invalid values return null. */
+export function httpDateMs(header: string | null | undefined): number | null {
+  if (!header) return null;
+  const ms = Date.parse(header);
+  return Number.isFinite(ms) ? ms : null;
+}
+
+/**
+ * Prefer Google's response Date over the local clock for JWT time checks.
+ * A drifted host clock otherwise rejects freshly issued id_tokens (`exp`).
+ */
+export function verificationNowMs(
+  localMs: number,
+  networkMs: number | null,
+): { nowMs: number; clockSkewMs: number } {
+  if (networkMs === null) {
+    return { nowMs: localMs, clockSkewMs: 0 };
+  }
+  return { nowMs: networkMs, clockSkewMs: localMs - networkMs };
+}
 
 export type GoogleClaims = {
   sub: string;
@@ -144,6 +168,15 @@ export async function verifyGoogleIdToken(
   const header = JwtHeader.parse(b64urlJson(h));
   const jwksRes = await fetchGoogle(GOOGLE_JWKS, {}, fetchImpl);
   if (!jwksRes.ok) throw new Error("jwks");
+  const { nowMs: verifyMs, clockSkewMs } = verificationNowMs(
+    nowMs,
+    httpDateMs(jwksRes.headers.get("date")),
+  );
+  if (Math.abs(clockSkewMs) > CLOCK_WARN_MS) {
+    log("warn", "google_clock_skew", {
+      skew_sec: Math.round(clockSkewMs / 1000),
+    });
+  }
   const jwks = JwksBody.parse(await jwksRes.json());
   const jwk = jwks.keys.find((k) => k["kid"] === header.kid);
   if (
@@ -168,8 +201,25 @@ export async function verifyGoogleIdToken(
   if (!ISSUERS.has(payload.iss)) throw new Error("iss");
   const audiences = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
   if (!audiences.includes(audience)) throw new Error("aud");
-  if (payload.exp * 1000 < nowMs - SKEW_MS) throw new Error("exp");
-  if (payload.nbf !== undefined && payload.nbf * 1000 > nowMs + SKEW_MS) {
+  if (payload.exp * 1000 < verifyMs - SKEW_MS) {
+    const expiredByMs = verifyMs - payload.exp * 1000;
+    const lifetimeMs =
+      payload.iat !== undefined
+        ? (payload.exp - payload.iat) * 1000
+        : 0;
+    // No Google Date + host hours ahead: a 1h id_token looks ~hours expired.
+    // A user who sat past real expiry is usually only minutes past `exp`.
+    if (
+      verifyMs === nowMs &&
+      expiredByMs > 30 * 60 * 1000 &&
+      lifetimeMs >= 15 * 60 * 1000 &&
+      lifetimeMs <= 2 * 60 * 60 * 1000
+    ) {
+      throw new Error("clock_skew");
+    }
+    throw new Error("exp");
+  }
+  if (payload.nbf !== undefined && payload.nbf * 1000 > verifyMs + SKEW_MS) {
     throw new Error("nbf");
   }
   const displayName = sanitizeDisplayName(payload.name ?? null);

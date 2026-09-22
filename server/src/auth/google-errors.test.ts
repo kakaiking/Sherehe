@@ -29,6 +29,9 @@ describe("googleCallbackErrorCode", () => {
   it("maps token and JWT failures to the generic code", () => {
     expect(googleCallbackErrorCode(new Error("token_http"))).toBe("google");
     expect(googleCallbackErrorCode(new Error("id_token"))).toBe("google");
+    expect(googleCallbackErrorCode(new Error("clock_skew"))).toBe(
+      "google_clock",
+    );
     expect(googleCallbackErrorCode("nope")).toBe("google");
   });
 });

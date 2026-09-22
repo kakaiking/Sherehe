@@ -1,5 +1,12 @@
-import { describe, expect, it } from "vitest";
-import { formatKsh, parseJsonBody } from "./api";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { api, downloadPdf, formatKsh, parseJsonBody } from "./api";
+import { PORTAL_HEADER, storePortal } from "./portal";
+
+afterEach(() => {
+  sessionStorage.clear();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe("formatKsh", () => {
   it("formats Kenyan shillings with a grouping separator", () => {
@@ -28,5 +35,68 @@ describe("parseJsonBody", () => {
   it("falls back to json() for fetch test doubles", async () => {
     const res = { json: async () => ({ csrfToken: "t" }) } as unknown as Response;
     expect(await parseJsonBody(res)).toEqual({ csrfToken: "t" });
+  });
+});
+
+describe("api portal header", () => {
+  it("sends X-Sherehe-Portal from the stored gate", async () => {
+    storePortal("admin");
+    const fetchMock = vi.fn(async () =>
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await api<{ ok: boolean }>("/v1/auth/me");
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    const headers = new Headers(init.headers);
+    expect(headers.get(PORTAL_HEADER)).toBe("admin");
+  });
+});
+
+describe("downloadPdf", () => {
+  it("saves as an octet-stream attachment without opening a viewer page", async () => {
+    vi.useFakeTimers();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        new Response(new Uint8Array([37, 80, 68, 70]), {
+          status: 200,
+          headers: { "content-type": "application/pdf" },
+        }),
+      ),
+    );
+    const createObjectURL = vi
+      .spyOn(URL, "createObjectURL")
+      .mockImplementation((blob) => {
+        expect(blob).toBeInstanceOf(Blob);
+        expect((blob as Blob).type).toBe("application/octet-stream");
+        return "blob:ticket-pdf";
+      });
+    const revokeObjectURL = vi
+      .spyOn(URL, "revokeObjectURL")
+      .mockImplementation(() => undefined);
+    const clicked: Array<{ href: string; download: string }> = [];
+    const realCreate = document.createElement.bind(document);
+    vi.spyOn(document, "createElement").mockImplementation((tagName: string) => {
+      const el = realCreate(tagName);
+      if (tagName === "a") {
+        el.click = () => {
+          clicked.push({ href: el.href, download: el.download });
+        };
+      }
+      return el;
+    });
+
+    await downloadPdf("/v1/orders/x/tickets.pdf", "sherehe-tickets.pdf");
+
+    expect(clicked).toEqual([
+      { href: "blob:ticket-pdf", download: "sherehe-tickets.pdf" },
+    ]);
+    expect(createObjectURL).toHaveBeenCalledOnce();
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:ticket-pdf");
   });
 });

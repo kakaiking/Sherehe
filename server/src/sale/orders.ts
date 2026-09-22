@@ -1,8 +1,9 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { Pool, PoolConnection, RowDataPacket } from "../db.js";
+import type { Pool, PoolConnection, RowDataPacket, ResultHeader } from "../db.js";
 import QRCode from "qrcode";
 import {
   assertCheckout,
+  assertPartnerCheckout,
   HOLD_MS,
   seatsFor,
   stubCountFor,
@@ -12,6 +13,7 @@ import {
   type SaleWindow,
 } from "../sale/engine.js";
 import { signTicketPublicId } from "../tickets/hmac.js";
+import { ticketPassUrl } from "../tickets/passUrl.js";
 import { stubHolderCaption } from "../tickets/holder.js";
 import { log } from "../log.js";
 import type { AccountKind } from "../auth/accounts.js";
@@ -215,6 +217,102 @@ export async function createTicketOrder(
   }
 }
 
+/**
+ * One-time free team tickets for a confirmed partner application.
+ * Locks the application row, issues a paid KSh 0 order, and stamps ticket_order_id.
+ */
+export async function createPartnerFreeTicketOrder(
+  pool: Pool,
+  partnerId: string,
+  code: TicketCode,
+  ticketSecret: string,
+): Promise<{ orderId: string; qty: number; totalKsh: 0 }> {
+  let orderId = "";
+  let qty = 0;
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query(
+      "UPDATE orders SET status = 'expired' WHERE status = 'pending' AND hold_expires_at IS NOT NULL AND hold_expires_at <= NOW()",
+    );
+    const [apps] = await conn.query<RowDataPacket[]>(
+      `SELECT id, member_count, status, ticket_order_id
+       FROM partner_applications
+       WHERE partner_id = ? AND status = 'confirmed'
+       ORDER BY created_at DESC
+       LIMIT 1
+       FOR UPDATE`,
+      [partnerId],
+    );
+    const app = apps[0] as
+      | {
+          id: string;
+          member_count: number;
+          status: string;
+          ticket_order_id: string | null;
+        }
+      | undefined;
+    if (!app) {
+      throw Object.assign(new Error("partner_not_confirmed"), {
+        name: "PartnerTicketError",
+      });
+    }
+    if (app.ticket_order_id) {
+      throw Object.assign(new Error("partner_already_claimed"), {
+        name: "PartnerTicketError",
+      });
+    }
+    qty = Number(app.member_count);
+    const eventId = await loadEventId(conn);
+    const snap = await loadSnapshot(conn, eventId);
+    const now = new Date();
+    const checked = assertPartnerCheckout(now, snap, { code, qty });
+    if (!checked.ok) {
+      const err = new Error(checked.reason);
+      err.name = "CheckoutError";
+      throw err;
+    }
+    orderId = randomUUID();
+    await conn.query(
+      `INSERT INTO orders (id, account_kind, user_id, event_id, kind, status, total_ksh, hold_expires_at)
+       VALUES (?, 'partner', ?, ?, 'tickets', 'pending', 0, NULL)`,
+      [orderId, partnerId, eventId],
+    );
+    await conn.query(
+      `INSERT INTO order_items (id, order_id, sku_kind, sku_code, title, qty, unit_price_ksh, seats)
+       VALUES (?, ?, 'ticket', ?, ?, ?, 0, ?)`,
+      [
+        randomUUID(),
+        orderId,
+        code,
+        checked.offering.name,
+        qty,
+        seatsFor(checked.offering, qty),
+      ],
+    );
+    const [linkResult] = await conn.query<ResultHeader>(
+      `UPDATE partner_applications
+       SET ticket_order_id = ?
+       WHERE id = ? AND ticket_order_id IS NULL`,
+      [orderId, app.id],
+    );
+    if (linkResult.affectedRows !== 1) {
+      throw Object.assign(new Error("partner_already_claimed"), {
+        name: "PartnerTicketError",
+      });
+    }
+    await conn.commit();
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
+
+  await fulfillPaidOrder(pool, orderId, ticketSecret);
+  return { orderId, qty, totalKsh: 0 };
+}
+
 export async function fulfillPaidOrder(
   pool: Pool,
   orderId: string,
@@ -329,6 +427,7 @@ export async function ticketsForOrder(
   pool: Pool,
   orderId: string,
   secret: string,
+  clientOrigin: string,
 ): Promise<
   Array<{
     publicId: string;
@@ -364,10 +463,7 @@ export async function ticketsForOrder(
     email: string;
   }>) {
     const signature = signTicketPublicId(row.public_id, secret);
-    const payload = JSON.stringify({
-      id: row.public_id,
-      sig: signature,
-    });
+    const payload = ticketPassUrl(clientOrigin, row.public_id, signature);
     const qrDataUrl = await QRCode.toDataURL(payload, { margin: 1, width: 192 });
     out.push({
       publicId: row.public_id,

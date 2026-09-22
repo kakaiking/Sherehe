@@ -6,7 +6,7 @@ import * as googleStart from "../auth/googleStart";
 import { storeGooglePending } from "../auth/googleStart";
 import { saveContinue } from "../flow/continue";
 import { SnackbarProvider } from "../snackbar";
-import { AuthPage } from "./AuthPage";
+import { AuthPage, resetOauthCompletingKeysForTests } from "./AuthPage";
 
 const me: User = {
   id: "u1",
@@ -23,9 +23,13 @@ function renderAuth(entry: string): ReturnType<typeof render> {
       <SnackbarProvider>
         <Routes>
           <Route path="/login" element={<AuthPage onAuth={() => undefined} />} />
-          <Route path="/" element={<p>Home module</p>} />
-          <Route path="/tickets" element={<p>Ticket step two</p>} />
-          <Route path="/account" element={<p>Account home</p>} />
+          <Route
+            path="/admin"
+            element={<AuthPage onAuth={() => undefined} mode="admin" />}
+          />
+          <Route path="/guest" element={<p>Home module</p>} />
+          <Route path="/guest/tickets" element={<p>Ticket step two</p>} />
+          <Route path="/guest/account" element={<p>Account home</p>} />
         </Routes>
       </SnackbarProvider>
     </MemoryRouter>,
@@ -36,6 +40,7 @@ afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
   sessionStorage.clear();
+  resetOauthCompletingKeysForTests();
 });
 
 describe("AuthPage Google", () => {
@@ -81,9 +86,41 @@ describe("AuthPage Google", () => {
     expect(
       screen.getByRole("button", { name: "Continue with Google" }),
     ).toBeTruthy();
-    fireEvent.click(screen.getByRole("button", { name: "Vendor" }));
+    expect(screen.getByRole("heading", { name: "Sign in" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Guest" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Partner" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Vendor" })).toBeNull();
+    expect(screen.getByText(/Fused Lens Studios/i)).toBeTruthy();
+    expect(screen.getByText(/Kirigiti,\s*Kiambu/i)).toBeTruthy();
     expect(screen.queryByLabelText("Email")).toBeNull();
     expect(screen.queryByLabelText("Password")).toBeNull();
+  });
+
+  it("shows a hold stub while finishing Google after the account picker", async () => {
+    storeGooglePending({
+      state: "u".repeat(64),
+      verifier: "v".repeat(43),
+      portal: "user",
+      resume: "login",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (String(url).includes("/csrf")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ csrfToken: "test-csrf" }),
+          });
+        }
+        return new Promise(() => undefined);
+      }),
+    );
+    renderAuth(`/login?code=auth-code-value&state=${"u".repeat(64)}`);
+    expect(
+      await screen.findByRole("heading", { name: /Sneaking you in/i }),
+    ).toBeTruthy();
+    expect(screen.queryByText(/^Hold$/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: "Continue with Google" })).toBeNull();
   });
 
   it("starts Google with PKCE in sessionStorage instead of a bounce 302", async () => {
@@ -120,6 +157,43 @@ describe("AuthPage Google", () => {
     leave.mockRestore();
   });
 
+  it("does not paint Admin confirming on a Guest-gate Google return", async () => {
+    storeGooglePending({
+      state: "u".repeat(64),
+      verifier: "v".repeat(43),
+      portal: "user",
+      resume: "login",
+    });
+    sessionStorage.setItem("sherehe.adminConfirming", "1");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        if (String(url).includes("/csrf")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ csrfToken: "test-csrf" }),
+          });
+        }
+        if (
+          String(url).includes("/v1/auth/google/callback") &&
+          init?.method === "POST"
+        ) {
+          const body = JSON.parse(String(init.body)) as { portal?: string };
+          expect(body.portal).toBe("user");
+          return Promise.resolve({
+            ok: true,
+            json: async () => me,
+          });
+        }
+        return Promise.reject(new Error(String(url)));
+      }),
+    );
+    renderAuth(`/login?code=auth-code-value&state=${"u".repeat(64)}`);
+    expect(screen.queryByText(/Confirming admin access/i)).toBeNull();
+    expect(screen.queryByRole("button", { name: /^Admin$/i })).toBeNull();
+    expect(await screen.findByText("Home module")).toBeTruthy();
+  });
+
   it("treats a Google return without a matching PKCE start as expired", async () => {
     renderAuth(`/login?code=auth-code-value&state=${"e".repeat(64)}`);
     expect((await screen.findByRole("alert")).textContent).toMatch(/expired/i);
@@ -130,6 +204,7 @@ describe("AuthPage Google", () => {
       state: "p".repeat(64),
       verifier: "v".repeat(43),
       portal: "user",
+      resume: "login",
     });
     vi.stubGlobal(
       "fetch",
@@ -154,11 +229,13 @@ describe("AuthPage Google", () => {
     );
     renderAuth(`/login?code=auth-code-value&state=${"p".repeat(64)}`);
     expect(await screen.findByText("Home module")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toBe("Signed in.");
+    expect(
+      screen.getByRole("status").querySelector(".snackbar-message")?.textContent,
+    ).toBe("Signed in as a guest.");
   });
 
   it("returns to the saved in-app step after Google sign-in", async () => {
-    saveContinue("/tickets?pick=early_bird");
+    saveContinue("/guest/tickets?pick=early_bird");
     vi.stubGlobal(
       "fetch",
       vi.fn((url: string) => {
@@ -176,7 +253,9 @@ describe("AuthPage Google", () => {
     );
     renderAuth("/login?from=google");
     expect(await screen.findByText("Ticket step two")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toBe("Signed in.");
+    expect(
+      screen.getByRole("status").querySelector(".snackbar-message")?.textContent,
+    ).toBe("Signed in as a guest.");
   });
 
   it("lands on home after Google sign-in when nothing is saved", async () => {
@@ -220,6 +299,46 @@ describe("AuthPage Google", () => {
     expect(await screen.findByText("Home module")).toBeTruthy();
     expect(screen.queryByLabelText("Kenyan mobile")).toBeNull();
     expect(screen.queryByRole("button", { name: "Save number" })).toBeNull();
-    expect(screen.getByRole("status").textContent).toBe("Signed in.");
+    expect(
+      screen.getByRole("status").querySelector(".snackbar-message")?.textContent,
+    ).toBe("Signed in as a guest.");
+  });
+
+  it("bounces an admin Google return off /login onto /admin without portal toggles", async () => {
+    const staff: User = { ...me, role: "staff", email: "kakaiphil@gmail.com" };
+    storeGooglePending({
+      state: "a".repeat(64),
+      verifier: "v".repeat(43),
+      portal: "admin",
+      resume: "admin",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string, init?: RequestInit) => {
+        if (String(url).includes("/csrf")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ csrfToken: "test-csrf" }),
+          });
+        }
+        if (
+          String(url).includes("/v1/auth/google/callback") &&
+          init?.method === "POST"
+        ) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => staff,
+          });
+        }
+        return Promise.reject(new Error(String(url)));
+      }),
+    );
+    renderAuth(`/login?code=auth-code-value&state=${"a".repeat(64)}`);
+    expect(await screen.findByRole("status")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Partner" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Vendor" })).toBeNull();
+    expect(screen.getByRole("status").textContent).toMatch(
+      /Confirming admin|Signed in as an admin/i,
+    );
   });
 });

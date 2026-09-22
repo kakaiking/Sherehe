@@ -1,12 +1,12 @@
+import { homeForPortal, readStoredPortal } from "../portal";
+
 const STORAGE_KEY = "sherehe.continuePath";
 
 const EXACT_PATHS = new Set([
-  "/tickets",
-  "/shop",
-  "/vendors",
-  "/services",
-  "/partners",
-  "/account",
+  "/guest",
+  "/guest/tickets",
+  "/guest/account",
+  "/admin",
 ]);
 
 /**
@@ -18,7 +18,10 @@ export function isSafeContinuePath(path: string): boolean {
   if (path.includes("\\") || path.includes("://")) return false;
   const pathname = path.split("?")[0] ?? "";
   if (EXACT_PATHS.has(pathname)) return true;
-  return pathname.startsWith("/orders/") && pathname.length > "/orders/".length;
+  return (
+    pathname.startsWith("/guest/orders/") &&
+    pathname.length > "/guest/orders/".length
+  );
 }
 
 export function saveContinue(path: string): void {
@@ -33,9 +36,9 @@ export function takeContinue(): string | null {
   return raw;
 }
 
-/** After a completed sign-in, resume checkout or land on home. */
+/** After a completed sign-in, resume checkout or land on the portal home. */
 export function afterAuthPath(): string {
-  return takeContinue() ?? "/";
+  return takeContinue() ?? homeForPortal(readStoredPortal());
 }
 
 export function continuePath(

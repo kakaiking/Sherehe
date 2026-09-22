@@ -7,9 +7,9 @@ import { useApiQuery } from "../cache/useCachedQuery";
 import { PageHead } from "../flow/PageHead";
 import { StepForm } from "../flow/StepForm";
 import { TICKET_STEPS } from "../flow/ticketSteps";
+import { useSnackbar } from "../snackbar";
 import { ticketLabel } from "../ticketLabel";
 import { WhenWhere } from "../WhenWhere";
-import { SHOP_RECEIPT_STEP, SHOP_STEPS } from "./shop/shopSteps";
 
 type Ticket = {
   publicId: string;
@@ -32,6 +32,7 @@ type Order = {
 export function OrderPage(): ReactElement {
   const params = useParams();
   const navigate = useNavigate();
+  const { show } = useSnackbar();
   const id = params["id"] ?? "";
   const { data: order, error, loading } = useApiQuery<Order>(
     queryKeys.order(id),
@@ -51,25 +52,17 @@ export function OrderPage(): ReactElement {
   }
 
   const ticketPaid = order.kind === "tickets" && order.status === "paid";
-  const productPaid = order.kind === "product" && order.status === "paid";
-  const meal = order.items[0];
 
   async function savePdf(): Promise<void> {
     if (!order) return;
-    setDownloading(true);
-    setPdfError(null);
+    // Leave the stub screen immediately; finish the save in the background
+    // and confirm on Tickets so the PDF never replaces this page.
+    void navigate("/guest/tickets");
     try {
-      if (order.kind === "product") {
-        await downloadPdf(`/v1/orders/${order.id}/receipt.pdf`, "sherehe-receipt.pdf");
-        void navigate("/account");
-        return;
-      }
       await downloadPdf(`/v1/orders/${order.id}/tickets.pdf`, "sherehe-tickets.pdf");
-      void navigate("/shop");
+      show("Ticket downloaded.");
     } catch (err) {
-      setPdfError((err as ApiError).detail);
-    } finally {
-      setDownloading(false);
+      show((err as ApiError).detail, "error");
     }
   }
 
@@ -122,47 +115,6 @@ export function OrderPage(): ReactElement {
         }
       >
         {body}
-      </StepForm>
-    );
-  }
-
-  if (order.kind === "product") {
-    return (
-      <StepForm
-        steps={SHOP_STEPS}
-        step={SHOP_RECEIPT_STEP}
-        footer={
-          productPaid ? (
-            <button type="button" onClick={() => void savePdf()} disabled={downloading}>
-              {downloading ? "Preparing PDF…" : "Download receipt"}
-            </button>
-          ) : undefined
-        }
-      >
-        {pdfError ? (
-          <p className="error" role="alert">
-            {pdfError}
-          </p>
-        ) : null}
-        {order.status === "pending" ? (
-          <p className="status">
-            Approve the M-Pesa prompt on your phone. If it times out, start a new
-            checkout.
-          </p>
-        ) : null}
-        <p className="pick-summary">
-          {meal ? `${meal.title} × ${meal.qty}` : "Meal"}
-        </p>
-        <label>
-          Amount
-          <input readOnly value={formatKsh(order.totalKsh)} />
-        </label>
-        {order.mpesaReceipt ? (
-          <label>
-            M-Pesa receipt
-            <input readOnly value={order.mpesaReceipt} />
-          </label>
-        ) : null}
       </StepForm>
     );
   }

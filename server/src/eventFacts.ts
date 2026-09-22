@@ -2,8 +2,11 @@
 
 export const EVENT_VENUE = "Fused Lens Studios, Kirigiti, Kiambu";
 
-/** Saturday 28 Nov 2026, 16:00 EAT — guest UI shows the calendar date, not the clock. */
+/** Saturday 28 Nov 2026, 16:00 EAT — guest UI shows the calendar date; doors copy is separate. */
 export const EVENT_STARTS_AT = new Date("2026-11-28T16:00:00+03:00");
+
+/** Guest-facing doors line under the venue locality. */
+export const EVENT_DOORS = "From 12 Noon till Late";
 
 /** Stall fee due a week before the night. */
 export const VENDOR_PAY_BY = new Date("2026-11-21T16:00:00+03:00");

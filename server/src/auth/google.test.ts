@@ -3,9 +3,11 @@ import { describe, expect, it } from "vitest";
 import {
   exchangeGoogleCode,
   googleAuthorizationUrl,
+  httpDateMs,
   parseTokenResponse,
   planGoogleAccount,
   statesMatch,
+  verificationNowMs,
   verifyGoogleIdToken,
 } from "./google.js";
 
@@ -24,6 +26,24 @@ function jwt(
 }
 
 describe("google oauth helpers", () => {
+  it("parses HTTP Date and prefers network time when the host clock drifts", () => {
+    expect(httpDateMs("Mon, 21 Sep 2026 08:26:55 GMT")).toBe(
+      Date.parse("Mon, 21 Sep 2026 08:26:55 GMT"),
+    );
+    expect(httpDateMs(null)).toBeNull();
+    expect(httpDateMs("not-a-date")).toBeNull();
+    const network = Date.parse("Mon, 21 Sep 2026 08:26:55 GMT");
+    const local = network + 3 * 3600 * 1000;
+    expect(verificationNowMs(local, network)).toEqual({
+      nowMs: network,
+      clockSkewMs: 3 * 3600 * 1000,
+    });
+    expect(verificationNowMs(local, null)).toEqual({
+      nowMs: local,
+      clockSkewMs: 0,
+    });
+  });
+
   it("builds an OpenID authorization URL", () => {
     const url = googleAuthorizationUrl(
       {
@@ -113,6 +133,73 @@ describe("google oauth helpers", () => {
       displayName: "Walter Kamau",
       givenName: "Walter",
     });
+  });
+
+  it("verifies against Google Date when the local clock is hours ahead", async () => {
+    const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+    });
+    const jwk = publicKey.export({ format: "jwk" });
+    // Real Google time for this token; local Date.now() is ~3h fast (repro).
+    const googleNowSec = Math.floor(Date.now() / 1000) - 3 * 3600;
+    const token = jwt(
+      privateKey,
+      { alg: "RS256", kid: "kid-1" },
+      {
+        iss: "https://accounts.google.com",
+        aud: "cid",
+        exp: googleNowSec + 3600,
+        iat: googleNowSec,
+        sub: "google-sub-skew",
+        email: "skew@example.com",
+        email_verified: true,
+      },
+    );
+    const fetchImpl: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({ keys: [{ ...jwk, kid: "kid-1", kty: "RSA" }] }),
+        {
+          status: 200,
+          headers: {
+            Date: new Date(googleNowSec * 1000).toUTCString(),
+          },
+        },
+      );
+    await expect(verifyGoogleIdToken(token, "cid", fetchImpl)).resolves.toEqual({
+      sub: "google-sub-skew",
+      email: "skew@example.com",
+      displayName: null,
+      givenName: null,
+    });
+  });
+
+  it("names extreme local clock drift when Google Date is missing", async () => {
+    const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+      modulusLength: 2048,
+    });
+    const jwk = publicKey.export({ format: "jwk" });
+    const googleNowSec = Math.floor(Date.now() / 1000) - 3 * 3600;
+    const token = jwt(
+      privateKey,
+      { alg: "RS256", kid: "kid-1" },
+      {
+        iss: "https://accounts.google.com",
+        aud: "cid",
+        exp: googleNowSec + 3600,
+        iat: googleNowSec,
+        sub: "google-sub-skew-2",
+        email: "skew2@example.com",
+        email_verified: true,
+      },
+    );
+    const fetchImpl: typeof fetch = async () =>
+      new Response(
+        JSON.stringify({ keys: [{ ...jwk, kid: "kid-1", kty: "RSA" }] }),
+        { status: 200 },
+      );
+    await expect(verifyGoogleIdToken(token, "cid", fetchImpl)).rejects.toThrow(
+      "clock_skew",
+    );
   });
 
   it("rejects an unverified email and a wrong audience", async () => {

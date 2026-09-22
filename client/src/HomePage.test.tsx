@@ -46,6 +46,7 @@ describe("HomePage", () => {
     });
     expect(container.textContent).toMatch(/Fused Lens/);
     expect(container.textContent).toMatch(/Kirigiti/);
+    expect(container.textContent).toMatch(/From 12 Noon till Late/);
     expect(container.textContent).toMatch(/28/);
     const results = await axe.run(container);
     const serious = results.violations.filter(

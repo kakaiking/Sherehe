@@ -53,6 +53,7 @@ describe("AccountPage history", () => {
     );
     expect(await screen.findByText("Walter Kamau")).toBeTruthy();
     expect(screen.getByText(/kakaiteclimited@gmail.com/)).toBeTruthy();
+    expect(screen.queryByText(/Signed in as/i)).toBeNull();
     expect(screen.getByText("Early Bird")).toBeTruthy();
     expect(screen.getByText(/11:50/)).toBeTruthy();
     expect(screen.queryByText(/paid/i)).toBeNull();
@@ -60,11 +61,11 @@ describe("AccountPage history", () => {
 
   it("sends a signed-out visitor to sign in instead of a holding page", () => {
     render(
-      <MemoryRouter initialEntries={["/account"]}>
+      <MemoryRouter initialEntries={["/guest/account"]}>
         <SnackbarProvider>
           <Routes>
             <Route
-              path="/account"
+              path="/guest/account"
               element={
                 <AccountPage user={null} onLogout={() => undefined} />
               }
@@ -78,7 +79,7 @@ describe("AccountPage history", () => {
     expect(screen.queryByText(/to see bookings/)).toBeNull();
   });
 
-  it("signs out onto the sign-in screen", async () => {
+  it("signs out onto guest Home", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn((input: RequestInfo | URL) => {
@@ -99,15 +100,16 @@ describe("AccountPage history", () => {
       }),
     );
     render(
-      <MemoryRouter initialEntries={["/account"]}>
+      <MemoryRouter initialEntries={["/guest/account"]}>
         <SnackbarProvider>
           <Routes>
             <Route
-              path="/account"
+              path="/guest/account"
               element={
                 <AccountPage user={user} onLogout={() => undefined} />
               }
             />
+            <Route path="/guest" element={<h1>Home</h1>} />
             <Route path="/login" element={<h1>Sign in</h1>} />
           </Routes>
         </SnackbarProvider>
@@ -115,8 +117,34 @@ describe("AccountPage history", () => {
     );
     expect(await screen.findByRole("button", { name: "Sign out" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
-    expect(await screen.findByRole("heading", { name: "Sign in" })).toBeTruthy();
+    expect(await screen.findByRole("heading", { name: "Home" })).toBeTruthy();
     expect(screen.getByText("Signed out.")).toBeTruthy();
-    expect(screen.queryByText(/to see bookings/)).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Sign in" })).toBeNull();
+  });
+
+  it("does not offer an Admin shortcut on Guest You for staff", async () => {
+    const staff: User = {
+      ...user,
+      role: "staff",
+      email: "kakaiphil@gmail.com",
+    };
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: async () => ({ orders: [] }),
+        }),
+      ),
+    );
+    render(
+      <MemoryRouter>
+        <SnackbarProvider>
+          <AccountPage user={staff} onLogout={() => undefined} />
+        </SnackbarProvider>
+      </MemoryRouter>,
+    );
+    expect(await screen.findByRole("button", { name: "Sign out" })).toBeTruthy();
+    expect(screen.queryByRole("link", { name: /^Admin$/i })).toBeNull();
   });
 });

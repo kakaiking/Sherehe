@@ -22,7 +22,9 @@ import {
   type GoogleLoginError,
 } from "./google-errors.js";
 import {
-  parsePortal,
+  dbAccountKind,
+  parseSessionKind,
+  type SessionKind,
   type UserRole,
 } from "./portal.js";
 import {
@@ -32,6 +34,7 @@ import {
   type AccountKind,
   type AccountTable,
 } from "./accounts.js";
+import { isStaffEmail } from "./staffEmail.js";
 
 const RegisterBody = z.object({
   email: z.string().email().max(255),
@@ -51,7 +54,7 @@ const PhoneBody = z.object({
 const GoogleCallbackBody = z.object({
   code: z.string().min(8).max(8192),
   verifier: z.string().regex(/^[A-Za-z0-9\-._~]{43,128}$/),
-  portal: z.enum(["user", "partner", "vendor"]).optional(),
+  portal: z.enum(["user", "admin"]).optional(),
 });
 
 function publicUser(user: {
@@ -189,9 +192,11 @@ export function authRouter(pool: Pool, config: Config): Router {
         fail("google_state");
         return;
       }
-      const portal = parsePortal(parsed.data.portal) ?? "user";
-      const table = accountTable(portal);
-      const intendedRole = roleForAccountKind(portal);
+      const sessionKind: SessionKind =
+        parseSessionKind(parsed.data.portal) ?? "user";
+      const accountKind = dbAccountKind(sessionKind);
+      const table = accountTable(accountKind);
+      const intendedRole = roleForAccountKind(accountKind);
       const idToken = await exchangeGoogleCode(
         oauth,
         parsed.data.code,
@@ -199,6 +204,13 @@ export function authRouter(pool: Pool, config: Config): Router {
         parsed.data.verifier,
       );
       const claims = await verifyGoogleIdToken(idToken, oauth.clientId, fetch);
+      const adminEmail = isStaffEmail(claims.email, config.STAFF_EMAIL);
+      if (sessionKind === "admin" && !adminEmail) {
+        fail("google_portal");
+        return;
+      }
+      const userRoleForInsert: UserRole =
+        table === "users" && adminEmail ? "staff" : intendedRole;
       const [subRows] = await pool.query<RowDataPacket[]>(
         `${profileSelect(table)} WHERE google_sub = ?`,
         [claims.sub],
@@ -246,7 +258,14 @@ export function authRouter(pool: Pool, config: Config): Router {
           await pool.query(
             `INSERT INTO users (id, email, google_sub, phone, password_hash, role, display_name, given_name)
              VALUES (?, ?, ?, NULL, NULL, ?, ?, ?)`,
-            [id, claims.email, claims.sub, intendedRole, claims.displayName, claims.givenName],
+            [
+              id,
+              claims.email,
+              claims.sub,
+              userRoleForInsert,
+              claims.displayName,
+              claims.givenName,
+            ],
           );
         } else {
           await pool.query(
@@ -260,13 +279,21 @@ export function authRouter(pool: Pool, config: Config): Router {
           email: claims.email,
           google_sub: claims.sub,
           phone: null,
-          role: intendedRole,
+          role: userRoleForInsert,
           display_name: claims.displayName,
           given_name: claims.givenName,
         };
       }
-      user = { ...user, role: sessionRole(table, user, portal) };
-      await createSession(pool, res, config, user.id, portal);
+      if (table === "users" && adminEmail && user.role !== "staff") {
+        await pool.query("UPDATE users SET role = 'staff' WHERE id = ?", [user.id]);
+        user = { ...user, role: "staff" };
+      }
+      user = { ...user, role: sessionRole(table, user, accountKind) };
+      if (sessionKind === "admin" && user.role !== "staff") {
+        fail("google_portal");
+        return;
+      }
+      await createSession(pool, res, config, user.id, sessionKind, req);
       res.json(publicUser({
         id: user.id,
         email: user.email,
@@ -384,7 +411,7 @@ export function authRouter(pool: Pool, config: Config): Router {
         }
         throw err;
       }
-      await createSession(pool, res, config, id, "user");
+      await createSession(pool, res, config, id, "user", req);
       res.status(201).json({
         id,
         email: parsed.data.email.toLowerCase(),
@@ -436,7 +463,7 @@ export function authRouter(pool: Pool, config: Config): Router {
         });
         return;
       }
-      await createSession(pool, res, config, user.id, "user");
+      await createSession(pool, res, config, user.id, "user", req);
       res.json({
         id: user.id,
         email: user.email,

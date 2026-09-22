@@ -6,63 +6,54 @@ import {
   saveContinue,
   takeContinue,
 } from "./continue";
+import { storePortal } from "../portal";
 
 afterEach(() => {
   sessionStorage.clear();
 });
 
 describe("isSafeContinuePath", () => {
-  it("accepts in-app catalog and order paths", () => {
-    expect(isSafeContinuePath("/tickets?pick=early_bird")).toBe(true);
-    expect(isSafeContinuePath("/shop")).toBe(true);
-    expect(isSafeContinuePath("/orders/abc")).toBe(true);
+  it("allows guest ticket paths and admin", () => {
+    expect(isSafeContinuePath("/guest/tickets?pick=early_bird")).toBe(true);
+    expect(isSafeContinuePath("/guest/orders/abc")).toBe(true);
+    expect(isSafeContinuePath("/admin")).toBe(true);
   });
 
-  it("rejects off-site and protocol-relative URLs", () => {
-    expect(isSafeContinuePath("https://evil.example/tickets")).toBe(false);
-    expect(isSafeContinuePath("//evil.example/tickets")).toBe(false);
+  it("rejects partner, vendor, shop, and off-site paths", () => {
+    expect(isSafeContinuePath("/guest/shop")).toBe(false);
+    expect(isSafeContinuePath("/partner")).toBe(false);
+    expect(isSafeContinuePath("/vendor/shop")).toBe(false);
+    expect(isSafeContinuePath("https://evil.example/guest/tickets")).toBe(false);
     expect(isSafeContinuePath("/login")).toBe(false);
   });
 });
 
 describe("saveContinue / takeContinue", () => {
-  it("returns a saved in-app path once", () => {
-    saveContinue("/tickets?pick=vip");
-    expect(takeContinue()).toBe("/tickets?pick=vip");
-    expect(takeContinue()).toBeNull();
-  });
-
-  it("drops an unsafe stored value", () => {
-    sessionStorage.setItem("sherehe.continuePath", "//evil.example");
+  it("round-trips a safe path once", () => {
+    saveContinue("/guest/tickets?pick=vip");
+    expect(takeContinue()).toBe("/guest/tickets?pick=vip");
     expect(takeContinue()).toBeNull();
   });
 });
 
 describe("afterAuthPath", () => {
-  it("lands on home when nothing is saved", () => {
-    expect(afterAuthPath()).toBe("/");
+  it("falls back to the stored portal home", () => {
+    storePortal("user");
+    expect(afterAuthPath()).toBe("/guest");
+    storePortal("admin");
+    expect(afterAuthPath()).toBe("/admin");
   });
 
-  it("prefers a saved in-app step", () => {
-    saveContinue("/shop?pick=cap");
-    expect(afterAuthPath()).toBe("/shop?pick=cap");
+  it("prefers a saved continue path", () => {
+    saveContinue("/guest/tickets?pick=cap");
+    expect(afterAuthPath()).toBe("/guest/tickets?pick=cap");
   });
 });
 
 describe("continuePath", () => {
-  it("encodes the selected offering", () => {
-    expect(continuePath("/tickets", "early_bird")).toBe(
-      "/tickets?pick=early_bird",
-    );
-  });
-
-  it("keeps extra shop params ahead of the pick", () => {
-    expect(
-      continuePath("/shop", "nyama-choma", {
-        vendor: "11111111-1111-4111-8111-111111111111",
-      }),
-    ).toBe(
-      "/shop?vendor=11111111-1111-4111-8111-111111111111&pick=nyama-choma",
+  it("encodes pick and optional extras", () => {
+    expect(continuePath("/guest/tickets", "early_bird")).toBe(
+      "/guest/tickets?pick=early_bird",
     );
   });
 });

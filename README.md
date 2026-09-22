@@ -1,8 +1,8 @@
 # Sherehe
 
-Last updated: 2026-09-19 06:38 AM CDT
+Last updated: 2026-09-21
 
-Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Tickets, partners, vendors, catering bookings, and a small shop.
+Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Event ticketing only.
 
 ## Contents
 
@@ -18,11 +18,11 @@ Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at
 
 ## Purpose
 
-Guests buy phased event tickets (Early Bird through VIIP, group of five, optional flash sale under 200 attendees) for the night at Fused Lens Studios. The header, home poster, ticket/vendor/partner flows, and PDF stubs show that date and studio. Partners and sponsors apply for review. Vendors pick a package and pay a fee. On the pick list each stall is a chit: category, name, fee, space, then labeled set-up / hours / pay-by, with operating rules quieter underneath. Customers can book FWW services (those bookings use the customer's own event date, not Sherehe's) and buy products. Payments go through M-Pesa STK Push (mock mode locally).
+Guests buy phased event tickets (Early Bird through VIIP, group of five, optional flash sale under 200 attendees) for the night at Fused Lens Studios. The header, home poster, ticket flow, and PDF stubs show that date and studio. Payments go through M-Pesa STK Push (mock mode locally).
 
-The public UI is a mobile-first barbecue pit: charcoal, flame, and sauce-pink, with a four-item bottom dock on phones (**Home**, **Tickets**, **Shop**, **You**). Sign-in has a three-gate toggle — **User**, **Partner**, **Vendor** — like Carelink’s portal switch. Google creates or reuses the row in that gate’s table (`users`, `partners`, or `vendors`); the same email can hold an account in all three, each with its own id. Staff sign in on **User**. Light and dark palettes still follow the operating system. There is no theme toggle.
+The public UI is a mobile-first barbecue pit: charcoal, flame, and sauce-pink. Two portals: **Guest** (`/guest` — Home / Tickets / You) and **Admin** (`/admin` — Dashboard / Tickets / Scan). Sign-in is shared `/login` for guests; admin Google starts from `/admin`. Google creates or reuses a `users` row and sets an httpOnly session cookie (`sherehe_sid_user` or `sherehe_sid_admin`). Signing into one gate does not clear the other; sign-out clears only the active gate. Staff live in the `users` table (`role = staff`); only `STAFF_EMAIL` may open the admin gate. Light and dark palettes follow the operating system. There is no theme toggle.
 
-**Tickets** are four steps: pick, quantity, pay with M-Pesa, then download a charcoal pit PDF stub. **Shop** on the user and partner gates lists vendors that have meals. Tapping a stall opens that stall’s three-column meal grid (nine a page, numbered pager). Tapping a meal opens quantity → M-Pesa → download receipt; the paid row lands in **Records** on You. On the vendor gate, Shop is that stall’s own meals (add / edit / delete). Tapping a meal lists who bought it and the M-Pesa receipt — not checkout. The offering is locked after a meal is picked; a left-arrow back control returns to the previous page (meals, then vendors). A signed-out tap on a meal stores that stall and meal and sends the visitor to **Continue with Google**, then returns them to quantity. Signing in from the Sign in screen with nothing saved lands on **Home**. Google stores the display name (shown on **You** above email and phone, and on stub/receipt lines). A Kenyan mobile is entered on **Receive Prompt** (country code **+254** plus nine spaced digits), not after Google. Sign out opens **Sign in**, not a signed-out holding page.
+**Tickets** are four steps: pick, quantity, pay with M-Pesa, then download a charcoal pit PDF stub. The paid row lands in **Records** on You. Signing in from the Sign in screen with nothing saved lands on `/guest`. Google stores the display name (shown on **You** above email and phone, and on stub lines). A Kenyan mobile is entered on **Receive Prompt** (country code **+254** plus nine spaced digits), not after Google. Sign out opens **Sign in**, not a signed-out holding page.
 
 ## Prerequisites
 
@@ -39,7 +39,7 @@ npm install
 npm run migrate -w server
 ```
 
-Staff bootstrap uses `STAFF_EMAIL`, `STAFF_PASSWORD`, and `STAFF_PHONE` from `.env` on first seed. Public sign-in is Google only — set `STAFF_EMAIL` to that Google account so the staff console is available after **Continue with Google** on the **User** gate (open **You → Staff**).
+Staff bootstrap uses `STAFF_EMAIL`, `STAFF_PASSWORD`, and `STAFF_PHONE` from `.env` on first seed. Public sign-in is Google only — set `STAFF_EMAIL` to that Google account so the admin portal is available after **Continue with Google** on `/admin`. Admin is reached only by opening `/admin` directly (no Admin shortcut from Guest You or other portals). Staff still need an admin session cookie for ops APIs. Only that email is promoted to staff.
 
 ## Usage
 
@@ -61,7 +61,7 @@ npm run dev -w server
 npm run dev -w client
 ```
 
-Open http://localhost:5173 — Vite proxies `/v1` to the API on port 8787 (8080 is often already taken on this host).
+Open http://localhost:5173/guest — Vite proxies `/v1` to the API on port 8787 (8080 is often already taken on this host). Bare `/` and unknown paths redirect to `/guest`.
 
 Local checks (same as CI):
 
@@ -69,7 +69,7 @@ Local checks (same as CI):
 bash scripts/ci.sh
 ```
 
-Buy a ticket while signed in: pick, quantity, **Receive Prompt**, then download the PDF. A group ticket is one QR for five people. Download stamps `stub_downloaded_at` on the paid order and then opens **Shop**. A later **Receive Prompt** asks to confirm another ticket if that stamp is already on file. With `MPESA_MODE=mock`, Daraja is skipped and the order is marked paid as soon as the STK step succeeds. Live mode uses Safaricom Daraja (OAuth token, STK Push, STK Query, and the HTTPS callback).
+Buy a ticket while signed in: pick, quantity, **Receive Prompt**, then download the PDF. A group ticket is one QR for five people. Download stamps `stub_downloaded_at` on the paid order, opens **Shop** right away while the PDF saves in the background, and shows a success snackbar there. A later **Receive Prompt** asks to confirm another ticket if that stamp is already on file. With `MPESA_MODE=mock`, Daraja is skipped and the order is marked paid as soon as the STK step succeeds. Live mode uses Safaricom Daraja (OAuth token, STK Push, STK Query, and the HTTPS callback).
 
 ## Environment
 
@@ -182,9 +182,9 @@ sequenceDiagram
   Express->>Postgres: Mark paid, issue one stub per unit (group of five is one QR)
   Express-->>React: Step 4 stub plus PDF download
   Buyer->>React: Download ticket
+  React->>Buyer: Save PDF
   React->>Express: GET /v1/orders/:id/tickets.pdf
   Express->>Postgres: Stamp stub_downloaded_at
-  React->>Buyer: Save PDF, then Shop
   Note over Buyer,React: Later Receive Prompt
   React->>Express: GET /v1/account/ticket-pass
   alt already downloaded a stub
@@ -194,9 +194,11 @@ sequenceDiagram
   React->>Express: POST /v1/orders/tickets
 ```
 
-Public routes: `/`, `/tickets`, `/shop`, `/account`, `/orders/:id`, `/login`. Partner/vendor application and services/staff screens remain at `/partners`, `/vendors`, `/services`, `/staff` (not on the dock). On Vercel those paths are not files — they need the catch-all rewrite to `index.html` after `/v1` and `/health`.
+Public routes: `/guest`, `/guest/tickets`, `/guest/account`, `/guest/orders/:id`, `/login`, plus public pass view `/pass/:publicId`. Admin stays at `/admin` (Dashboard / Tickets / **Scan**). Bare legacy paths such as `/`, `/shop`, `/tickets`, `/partner`, `/vendor` redirect to `/guest`. On Vercel those paths are not files — they need the catch-all rewrite to `index.html` after `/v1` and `/health`.
 
-Catalog, account, and staff GETs paint from `localStorage` plus an in-memory map (same idea as the internal portal: cache-first, then Postgres). A cold visit shows a skeleton. Coming back to a page within 45 seconds does not hit the API. A full reload paints the stored snapshot immediately and refreshes from `/v1` in the background. Session cookies stay httpOnly; sign-out drops only private rows.
+Admin is ticket ops: Dashboard stats, paid ticket buyers, flash sale from Attendees, and **Scan** gate check-in (camera or paste). A successful scan marks the ticket used. Guest phone cameras open the signed pass URL and see Valid / Already checked in / Void without consuming the pass. On `/admin`, the brand and back control stay inside the admin shell. Guest You is a separate session from admin.
+
+Catalog, account, and staff GETs paint from `localStorage` plus an in-memory map (cache-first, then Postgres). A cold visit shows a skeleton. Coming back to a page within 45 seconds does not hit the API. A full reload paints the stored snapshot immediately and refreshes from `/v1` in the background. Session cookies stay httpOnly; API calls send `X-Sherehe-Portal` so the server picks the right gate cookie; sign-out drops only that gate’s session and private cache rows. Google always returns to `/login`; an Admin PKCE start is bounced to `/admin` to finish — a Guest return never shows the admin confirming shell.
 
 ```mermaid
 sequenceDiagram
@@ -220,22 +222,12 @@ sequenceDiagram
   end
 ```
 
-Guests, partners, and vendors are separate identity tables. Email and Google subject are unique **inside** each table, not across the product.
+Guests and admins share the `users` table. Email and Google subject are unique there. Admin is a separate session cookie pointing at the same staff user row.
 
 ```mermaid
 erDiagram
-  users ||--o{ sessions : "user gate"
-  partners ||--o{ sessions : "partner gate"
-  vendors ||--o{ sessions : "vendor gate"
+  users ||--o{ sessions : "user or admin gate"
   users {
-    char id PK
-    varchar email UK
-  }
-  partners {
-    char id PK
-    varchar email UK
-  }
-  vendors {
     char id PK
     varchar email UK
   }
@@ -257,7 +249,7 @@ erDiagram
 - **Continue with Google fails immediately:** set `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`, add authorized redirect `http://localhost:5173/v1/auth/google/callback`, then `npm run migrate -w server` if the Google columns are missing.
 - **Google account picker works, then production shows “This page doesn’t exist” on `/login`:** Vercel is resolving `/login` as a missing file. Confirm `vercel.json` ends with a rewrite of `/(.*)` to `/index.html`, then redeploy. Also add the production origin and `https://<host>/v1/auth/google/callback` in Google Cloud Console.
 - **Google account picker works, then the app says sign-in expired:** click **Continue with Google** again from this tab (the PKCE verifier lives in sessionStorage). Do not reuse an old Google tab after a failed attempt.
-- **Google account picker works, then the app says sign-in did not complete:** the API could not reach Google (`google_auth_failed` / `fetch failed` in `.local/state/sherehe-dev/server.log`). Retry; if a VPN is on, pause it or allow `oauth2.googleapis.com` and `www.googleapis.com`.
+- **Google account picker works, then the app says sign-in did not complete:** check `.local/state/sherehe-dev/server.log` for `google_auth_failed`. `reason: "exp"` / `google_clock_skew` means the API host clock is wrong — fix NTP (`sudo chronyc makestep`, and prefer `timedatectl set-local-rtc 0`). `fetch failed` / `google_network` means the API could not reach Google; retry, or pause a VPN / allow `oauth2.googleapis.com` and `www.googleapis.com`. The API prefers Google's HTTP `Date` for id_token checks so modest drift no longer blocks sign-in.
 
 ## Known limitations
 

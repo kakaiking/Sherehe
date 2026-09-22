@@ -7,7 +7,7 @@ readonly START_REPO_ROOT="$(
 )"
 readonly START_CLIENT_PORT="${START_CLIENT_PORT:-5173}"
 readonly START_API_PORT="${START_API_PORT:-8787}"
-readonly START_DEFAULT_CLIENT_URL="${START_CLIENT_URL:-http://localhost:${START_CLIENT_PORT}}"
+readonly START_DEFAULT_CLIENT_URL="${START_CLIENT_URL:-http://localhost:${START_CLIENT_PORT}/guest}"
 readonly START_DEFAULT_API_HEALTH_URL="${START_API_HEALTH_URL:-http://127.0.0.1:${START_API_PORT}/health}"
 readonly START_LOG_DIR="${START_LOG_DIR:-${START_REPO_ROOT}/.local/state/sherehe-dev}"
 

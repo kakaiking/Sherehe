@@ -12,10 +12,8 @@ import type { RedisClient } from "./redis.js";
 import { authRouter } from "./auth/router.js";
 import { catalogRouter } from "./routes/catalog.js";
 import { ordersRouter, mpesaCallbackRouter } from "./routes/orders.js";
-import { partnersRouter } from "./routes/partners.js";
-import { vendorsRouter } from "./routes/vendors.js";
-import { commerceRouter } from "./routes/commerce.js";
 import { staffRouter } from "./routes/staff.js";
+import { passesRouter } from "./routes/passes.js";
 import { accountRouter } from "./routes/account.js";
 import { log } from "./log.js";
 
@@ -52,7 +50,7 @@ export function createApp(
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: "32kb" }));
+  app.use(express.json({ limit: "256kb" }));
   app.use(cookieParser());
   app.use(csrfMiddleware(config));
   app.use(loadUser(pool));
@@ -74,10 +72,8 @@ export function createApp(
   app.use("/v1/auth", authRouter(pool, config));
   app.use("/v1/catalog", catalogRouter(pool));
   app.use("/v1/orders", payLimiter, ordersRouter(pool, config, stk));
-  app.use("/v1/partners", partnersRouter(pool));
-  app.use("/v1/vendors", vendorsRouter(pool, config, stk));
-  app.use("/v1/commerce", commerceRouter(pool, config, stk));
   app.use("/v1/staff", staffRouter(pool, config));
+  app.use("/v1/passes", passesRouter(pool, config));
   app.use("/v1/account", accountRouter(pool));
 
   app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

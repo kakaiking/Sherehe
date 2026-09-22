@@ -1,17 +1,17 @@
 import { type ReactElement } from "react";
 import { eventDayParts, formatEventDay, venueLines } from "./datetime";
+import { EVENT_DOORS } from "./eventFacts";
 import { useCatalogEvent } from "./eventContext";
 
 /**
- * Calendar-block + studio. The date is the night; the clock stays off the face
- * until doors are published as a guest fact.
+ * Calendar-block + studio + doors. Date stays on the cal tile; hours sit under locality.
  */
 export function WhenWhere({
   compact = false,
   ticket = false,
 }: {
   compact?: boolean;
-  /** Stacked night / hall / locality, matching the PDF stub. */
+  /** Stacked night / hall / locality / doors, matching the PDF stub. */
   ticket?: boolean;
 }): ReactElement | null {
   const event = useCatalogEvent();
@@ -22,12 +22,13 @@ export function WhenWhere({
   if (ticket) {
     const day = formatEventDay(event.startsAt);
     return (
-      <div className="pass-stub-meta" aria-label={`${day}, ${event.venue}`}>
+      <div className="pass-stub-meta" aria-label={`${day}, ${event.venue}, ${EVENT_DOORS}`}>
         <time dateTime={event.startsAt} className="pass-stub-day">
           {day}
         </time>
         <p className="pass-stub-hall">{hall}</p>
         {locality ? <p className="pass-stub-locality">{locality}</p> : null}
+        <p className="pass-stub-doors">{EVENT_DOORS}</p>
       </div>
     );
   }
@@ -45,7 +46,10 @@ export function WhenWhere({
   }
 
   return (
-    <div className="whenwhere" aria-label={`${parts.weekday} ${parts.day} ${parts.month} ${parts.year}, ${event.venue}`}>
+    <div
+      className="whenwhere"
+      aria-label={`${parts.weekday} ${parts.day} ${parts.month} ${parts.year}, ${event.venue}, ${EVENT_DOORS}`}
+    >
       <p className="whenwhere-cal">
         <span className="whenwhere-weekday">{parts.weekday}</span>
         <time dateTime={event.startsAt} className="whenwhere-day">
@@ -58,6 +62,7 @@ export function WhenWhere({
       <p className="whenwhere-place">
         <span className="whenwhere-hall">{hall}</span>
         {locality ? <span className="whenwhere-locality">{locality}</span> : null}
+        <span className="whenwhere-doors">{EVENT_DOORS}</span>
       </p>
     </div>
   );

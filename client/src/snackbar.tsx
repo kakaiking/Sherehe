@@ -37,6 +37,10 @@ export function SnackbarProvider({
     setNote({ id: Date.now(), message, tone });
   }, []);
 
+  const dismiss = useCallback(() => {
+    setNote(null);
+  }, []);
+
   useEffect(() => {
     if (!note) return;
     const timer = window.setTimeout(() => setNote(null), HOLD_MS);
@@ -50,13 +54,21 @@ export function SnackbarProvider({
       {children}
       {note ? (
         <div className="snackbar-host">
-          <p
+          <div
             key={note.id}
             className={`snackbar snackbar-${note.tone}`}
             role={note.tone === "error" ? "alert" : "status"}
           >
-            {note.message}
-          </p>
+            <span className="snackbar-message">{note.message}</span>
+            <button
+              type="button"
+              className="snackbar-close"
+              aria-label="Dismiss"
+              onClick={dismiss}
+            >
+              ×
+            </button>
+          </div>
         </div>
       ) : null}
     </SnackbarContext.Provider>

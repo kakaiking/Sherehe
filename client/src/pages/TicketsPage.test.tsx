@@ -44,17 +44,16 @@ function catalogOk(): void {
   );
 }
 
-function renderTickets(user: User | null, entry = "/tickets"): ReturnType<typeof render> {
-  const entries = entry === "/tickets" ? ["/", "/tickets"] : ["/", entry];
+function renderTickets(user: User | null, entry = "/guest/tickets"): ReturnType<typeof render> {
+  const entries = entry === "/guest/tickets" ? ["/guest", "/guest/tickets"] : ["/guest", entry];
   return render(
     <MemoryRouter initialEntries={entries} initialIndex={1}>
       <SnackbarProvider>
         <Routes>
-          <Route path="/" element={<p>Home screen</p>} />
-          <Route path="/tickets" element={<TicketsPage user={user} />} />
+          <Route path="/guest" element={<p>Home screen</p>} />
+          <Route path="/guest/tickets" element={<TicketsPage user={user} />} />
           <Route path="/login" element={<p>Sign in screen</p>} />
-          <Route path="/orders/:id" element={<p>Paid stub</p>} />
-          <Route path="/shop" element={<p>Shop screen</p>} />
+          <Route path="/guest/orders/:id" element={<p>Paid stub</p>} />
         </Routes>
       </SnackbarProvider>
     </MemoryRouter>,
@@ -90,13 +89,13 @@ describe("TicketsPage stepped checkout", () => {
     fireEvent.click(screen.getByRole("button", { name: /Early Bird/ }));
     expect(screen.getByText("Sign in screen")).toBeTruthy();
     expect(sessionStorage.getItem("sherehe.continuePath")).toBe(
-      "/tickets?pick=early_bird",
+      "/guest/tickets?pick=early_bird",
     );
   });
 
   it("resumes quantity for a signed-in visitor with ?pick=", async () => {
     catalogOk();
-    renderTickets(signedIn, "/tickets?pick=group");
+    renderTickets(signedIn, "/guest/tickets?pick=group");
     const ticket = await screen.findByLabelText("Ticket");
     expect((ticket as HTMLInputElement).value).toBe("Group Ticket (5 people)");
     expect(screen.getByLabelText("Quantity")).toBeTruthy();

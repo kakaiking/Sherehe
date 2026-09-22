@@ -10,9 +10,9 @@ afterEach(() => {
 describe("HistoryBackButton", () => {
   it("returns to the previous history entry", () => {
     render(
-      <MemoryRouter initialEntries={["/", "/login"]} initialIndex={1}>
+      <MemoryRouter initialEntries={["/guest", "/login"]} initialIndex={1}>
         <Routes>
-          <Route path="/" element={<p>Home screen</p>} />
+          <Route path="/guest" element={<p>Home screen</p>} />
           <Route path="/login" element={<HistoryBackButton />} />
         </Routes>
       </MemoryRouter>,
@@ -21,11 +21,11 @@ describe("HistoryBackButton", () => {
     expect(screen.getByText("Home screen")).toBeTruthy();
   });
 
-  it("falls back to home when this is the first history entry", () => {
+  it("falls back to the guest portal home when this is the first history entry", () => {
     render(
       <MemoryRouter initialEntries={["/login"]}>
         <Routes>
-          <Route path="/" element={<p>Home screen</p>} />
+          <Route path="/guest" element={<p>Home screen</p>} />
           <Route path="/login" element={<HistoryBackButton />} />
         </Routes>
       </MemoryRouter>,
@@ -37,12 +37,18 @@ describe("HistoryBackButton", () => {
   it("prefers an explicit handler when the flow owns the previous step", () => {
     let called = false;
     render(
-      <MemoryRouter initialEntries={["/", "/tickets"]} initialIndex={1}>
+      <MemoryRouter initialEntries={["/guest", "/guest/tickets"]} initialIndex={1}>
         <Routes>
-          <Route path="/" element={<p>Home screen</p>} />
+          <Route path="/guest" element={<p>Home screen</p>} />
           <Route
-            path="/tickets"
-            element={<HistoryBackButton onClick={() => { called = true; }} />}
+            path="/guest/tickets"
+            element={
+              <HistoryBackButton
+                onClick={() => {
+                  called = true;
+                }}
+              />
+            }
           />
         </Routes>
       </MemoryRouter>,
