@@ -51,7 +51,7 @@ function stubFetch(): void {
 }
 
 describe("guest portal dock", () => {
-  it("hides the top site header on guest home but keeps the dock", async () => {
+  it("defers the top site header to desktop on guest home but keeps the dock", async () => {
     stubFetch();
     render(
       <MemoryRouter initialEntries={["/guest"]}>
@@ -59,10 +59,17 @@ describe("guest portal dock", () => {
       </MemoryRouter>,
     );
     expect(await screen.findByRole("heading", { name: "Sherehe" })).toBeTruthy();
-    expect(document.querySelector(".site-header")).toBeNull();
+    const header = document.querySelector(".site-header");
+    expect(header).not.toBeNull();
+    expect(header?.classList.contains("site-header--desktop-only")).toBe(true);
+    expect(header?.querySelector(".brand")).not.toBeNull();
     const dock = screen.getByRole("navigation", { name: "Main" });
     const labels = [...dock.querySelectorAll("a")].map((a) => a.textContent?.trim());
     expect(labels).toEqual(["Home", "Tickets", "Partners"]);
+    const primary = screen.getByRole("navigation", { name: "Primary" });
+    expect(
+      [...primary.querySelectorAll("a")].map((a) => a.textContent?.trim()),
+    ).toEqual(["Home", "Tickets", "Partners"]);
   });
 
   it("has home, tickets, and partners when signed out — no sign-in chrome", () => {

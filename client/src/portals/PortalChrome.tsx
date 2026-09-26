@@ -14,19 +14,27 @@ export function PortalChrome({
   brandTo: string;
   /** Compact date · venue under the mark. Off on auth gates (login already shows WhenWhere). */
   brandEvent?: boolean;
-  /** Sticky brand bar. Off on guest home (hero already carries the mark). */
-  header?: boolean;
+  /**
+   * Sticky brand bar. `true` always; `false` never; `"desktop"` only from
+   * the 768px breakpoint (guest home keeps the bottom dock on small screens).
+   */
+  header?: boolean | "desktop";
   desktopNav?: ReactNode;
   dock?: ReactNode;
   children: ReactNode;
 }): ReactElement {
+  const headerClass =
+    header === "desktop"
+      ? "site-header site-header--desktop-only"
+      : "site-header";
+
   return (
     <div className={dock ? "app-shell" : "app-shell app-shell--no-dock"}>
       <a className="skip" href="#main">
         Skip to main content
       </a>
       {header ? (
-        <header className="site-header">
+        <header className={headerClass}>
           <div className="wrap">
             <NavLink className="brand" to={brandTo}>
               <span className="brand-mark">Sherehe</span>

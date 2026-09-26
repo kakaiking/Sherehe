@@ -15,7 +15,7 @@ export function GuestLayout({
   return (
     <PortalChrome
       brandTo="/guest"
-      header={!onHome}
+      header={onHome ? "desktop" : true}
       desktopNav={
         <nav className="nav nav-desktop" aria-label="Primary">
           <NavLink to="/guest" end>

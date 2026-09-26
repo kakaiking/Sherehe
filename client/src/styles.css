@@ -220,11 +220,31 @@ button.snackbar-close:focus-visible {
   backdrop-filter: blur(14px);
 }
 
+/* Guest home: hero owns the mark on small screens; top nav from 768px. */
+.site-header--desktop-only {
+  display: none;
+}
+
 .site-header .wrap {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
   gap: var(--space-3);
   align-items: center;
+}
+
+/* Home desktop: nav only, centered — hero already carries the brand. */
+.site-header--desktop-only .wrap {
+  display: flex;
+  justify-content: center;
+}
+
+.site-header--desktop-only .brand {
+  display: none;
+}
+
+.site-header--desktop-only .nav-desktop {
+  grid-column: unset;
+  justify-self: unset;
 }
 
 .brand {
@@ -2389,6 +2409,10 @@ button.sheet-scrim {
 
   .app-shell {
     padding-bottom: 0;
+  }
+
+  .site-header--desktop-only {
+    display: block;
   }
 
   .nav.nav-desktop {
