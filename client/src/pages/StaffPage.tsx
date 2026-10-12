@@ -185,6 +185,12 @@ export function StaffPage({
   const [desk, setDesk] = useState<DeskId>("dashboard");
   const [attendeesPage, setAttendeesPage] = useState(0);
   const [flashModalOpen, setFlashModalOpen] = useState(false);
+  const [buyerTicket, setBuyerTicket] = useState<TicketTypeStat | null>(null);
+  const [ticketBuyersForType, setTicketBuyersForType] = useState<
+    { id: string; name: string | null; email: string | null }[] | null
+  >(null);
+  const [buyersLoading, setBuyersLoading] = useState(false);
+  const buyersTitleId = useId();
   const [flashCloseConfirm, setFlashCloseConfirm] = useState(false);
   const [draftFlashDates, setDraftFlashDates] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -291,7 +297,29 @@ export function StaffPage({
 
   function openDesk(next: DeskId): void {
     setDesk(next);
-    if (next !== "tickets") setFlashModalOpen(false);
+    if (next !== "tickets") {
+      setFlashModalOpen(false);
+      setBuyerTicket(null);
+    }
+  }
+
+  async function openTicketBuyers(ticket: TicketTypeStat): Promise<void> {
+    setBuyerTicket(ticket);
+    setTicketBuyersForType(null);
+    setBuyersLoading(true);
+    setError(null);
+    try {
+      const body = await api<{
+        buyers: { id: string; name: string | null; email: string | null }[];
+      }>(`/v1/staff/tickets/${encodeURIComponent(ticket.code)}/buyers`);
+      setTicketBuyersForType(body.buyers);
+    } catch (err) {
+      const apiErr = err as ApiError;
+      setError(apiErr.detail ?? "Could not load buyers.");
+      setBuyerTicket(null);
+    } finally {
+      setBuyersLoading(false);
+    }
   }
 
   function goBack(): void {
@@ -570,7 +598,13 @@ export function StaffPage({
                 ) : (
                   <div className="admin-stat-grid">
                     {ticketTypes.map((t) => (
-                      <div key={t.code} className="admin-stat admin-stat-static">
+                      <button
+                        key={t.code}
+                        type="button"
+                        className="admin-stat"
+                        aria-label={`${t.name} buyers`}
+                        onClick={() => void openTicketBuyers(t)}
+                      >
                         <span className="admin-stat-label">{t.name}</span>
                         <span className="admin-stat-value">{t.sold}</span>
                         <span className="admin-stat-hint">
@@ -578,10 +612,68 @@ export function StaffPage({
                             ? `of ${t.capacity} · ${formatKsh(t.priceKsh)}`
                             : formatKsh(t.priceKsh)}
                         </span>
-                      </div>
+                      </button>
                     ))}
                   </div>
                 )}
+
+                {buyerTicket ? (
+                  <div className="confirm-layer">
+                    <button
+                      type="button"
+                      className="confirm-scrim"
+                      aria-label="Dismiss"
+                      onClick={() => setBuyerTicket(null)}
+                    />
+                    <div
+                      className="confirm-dialog admin-buyers-dialog"
+                      role="dialog"
+                      aria-modal="true"
+                      aria-labelledby={buyersTitleId}
+                    >
+                      <button
+                        type="button"
+                        className="sheet-close"
+                        aria-label="Close"
+                        onClick={() => setBuyerTicket(null)}
+                      >
+                        <svg viewBox="0 0 24 24" aria-hidden="true">
+                          <path
+                            d="M6 6l12 12M18 6L6 18"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </button>
+                      <h2 id={buyersTitleId}>{buyerTicket.name}</h2>
+                      {buyersLoading || ticketBuyersForType === null ? (
+                        <p className="status">Loading buyers…</p>
+                      ) : ticketBuyersForType.length === 0 ? (
+                        <p className="status">Nobody has bought this ticket yet.</p>
+                      ) : (
+                        <div className="admin-buyers-scroll">
+                          <table className="admin-buyers-table">
+                            <thead>
+                              <tr>
+                                <th scope="col">Name</th>
+                                <th scope="col">Email</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {ticketBuyersForType.map((b) => (
+                                <tr key={b.id}>
+                                  <td>{b.name?.trim() || "—"}</td>
+                                  <td>{b.email?.trim() || "—"}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : null}
 
                 {flashModalOpen ? (
                   <div className="confirm-layer">

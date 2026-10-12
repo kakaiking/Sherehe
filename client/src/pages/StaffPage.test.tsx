@@ -406,6 +406,46 @@ describe("StaffPage tickets and attendees", () => {
     expect(screen.queryByText("Amina Otieno")).toBeNull();
   });
 
+  it("opens a buyers table when a ticket card is clicked", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        const path = String(url);
+        if (path.includes("/csrf")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ csrfToken: "test-csrf" }),
+          });
+        }
+        if (path.includes("/staff/overview")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => overviewPayload(),
+          });
+        }
+        if (path.includes("/staff/tickets/early_bird/buyers")) {
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({
+              buyers: [{ id: "o1", name: "Amina Otieno", email: "amina@example.com" }],
+            }),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
+    renderStaff();
+
+    fireEvent.click(await screen.findByRole("tab", { name: "Tickets" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Early Bird buyers" }));
+
+    expect(await screen.findByRole("dialog", { name: "Early Bird" })).toBeTruthy();
+    expect(await screen.findByRole("columnheader", { name: "Name" })).toBeTruthy();
+    expect(screen.getByRole("columnheader", { name: "Email" })).toBeTruthy();
+    expect(screen.getByText("Amina Otieno")).toBeTruthy();
+    expect(screen.getByText("amina@example.com")).toBeTruthy();
+  });
+
   it("opens flash sale settings in a modal", async () => {
     stubStaffFetch();
     renderStaff();

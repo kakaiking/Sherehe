@@ -185,6 +185,50 @@ export function staffRouter(pool: Pool, config: Config): Router {
     }
   });
 
+  r.get("/tickets/:code/buyers", async (req, res, next) => {
+    try {
+      const code = z.enum(TICKET_CODES).safeParse(req.params["code"]);
+      if (!code.success) {
+        res.status(422).json({
+          type: "https://httpstatuses.com/422",
+          title: "Unprocessable Entity",
+          status: 422,
+          detail: "Unknown ticket type.",
+        });
+        return;
+      }
+      const eventId = await loadEventId(pool);
+      const [rows] = await pool.query<RowDataPacket[]>(
+        `SELECT o.id,
+                ${ORDER_BUYER_DISPLAY} AS display_name,
+                ${ORDER_BUYER_EMAIL} AS email
+         FROM orders o
+         ${ORDER_BUYER_JOINS}
+         WHERE o.kind = 'tickets'
+           AND o.status = 'paid'
+           AND o.event_id = ?
+           AND EXISTS (
+             SELECT 1 FROM order_items oi
+             WHERE oi.order_id = o.id
+               AND oi.sku_kind = 'ticket'
+               AND oi.sku_code = ?
+           )
+         ORDER BY COALESCE(o.paid_at, o.created_at) DESC
+         LIMIT 500`,
+        [eventId, code.data],
+      );
+      res.json({
+        buyers: rows.map((b) => ({
+          id: String(b["id"]),
+          name: b["display_name"] != null ? String(b["display_name"]) : null,
+          email: b["email"] != null ? String(b["email"]) : null,
+        })),
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
   r.post("/orders/:id/refund", async (req, res, next) => {
     try {
       const id = z.string().uuid().safeParse(req.params["id"]);

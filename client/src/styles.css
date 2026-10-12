@@ -2021,6 +2021,36 @@ button.sheet-scrim {
   min-height: 44px;
 }
 
+.admin-buyers-dialog {
+  width: min(36rem, 100%);
+}
+
+.admin-buyers-scroll {
+  margin-top: var(--space-4);
+  max-height: min(24rem, 60vh);
+  overflow: auto;
+}
+
+.admin-buyers-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.admin-buyers-table th,
+.admin-buyers-table td {
+  text-align: left;
+  padding: 0.55rem 0.4rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--ink) 18%, transparent);
+  vertical-align: top;
+}
+
+.admin-buyers-table th {
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .admin-flash-dialog {
   width: min(24rem, 100%);
   max-height: min(85dvh, 40rem);
