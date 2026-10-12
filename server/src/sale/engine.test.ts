@@ -316,9 +316,10 @@ describe("assertCapacityPool", () => {
     viip: 20,
     group: 10,
     flash: 50,
+    test: 10,
   };
 
-  it("accepts the fixed 300 allocation", () => {
+  it("accepts the fixed 310 allocation", () => {
     const r = assertCapacityPool(balanced);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.sum).toBe(TICKET_CAPACITY_POOL);
@@ -329,7 +330,7 @@ describe("assertCapacityPool", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.reason).toBe("sum_mismatch");
-      expect(r.sum).toBe(301);
+      expect(r.sum).toBe(311);
     }
   });
 
@@ -349,6 +350,7 @@ describe("assertCapacityPool", () => {
       "viip",
       "group",
       "flash",
+      "test",
     ]);
   });
 });

@@ -123,6 +123,7 @@ export async function migrateAndSeed(): Promise<void> {
     await pool.query("UPDATE ticket_types SET capacity = 20 WHERE code = 'viip'");
     await pool.query("UPDATE ticket_types SET capacity = 10 WHERE code = 'group'");
     await pool.query("UPDATE ticket_types SET capacity = 50 WHERE code = 'flash'");
+    await pool.query("UPDATE ticket_types SET capacity = 10, price_ksh = 5, name = 'Test Ticket' WHERE code = 'test'");
     await syncStaffEmail(pool, config);
     log("info", "migrate_ok", {});
   } finally {
@@ -338,6 +339,7 @@ async function seed(
     ["viip", "VIIP Ticket", 5500, 1, 20, 5],
     ["group", "Group Ticket (5 people)", 13000, 5, 10, 6],
     ["flash", "Flash Sale", 1500, 1, 50, 7],
+    ["test", "Test Ticket", 5, 1, 10, 0],
   ];
   for (const t of types) {
     await pool.query(
@@ -355,9 +357,11 @@ async function seed(
      (?, ?, 'regular', ?, NULL),
      (?, ?, 'vip', ?, NULL),
      (?, ?, 'viip', ?, NULL),
-     (?, ?, 'group', ?, NULL)`,
+     (?, ?, 'group', ?, NULL),
+     (?, ?, 'test', ?, NULL)`,
     [
       randomUUID(), eventId, open, earlyEnd,
+      randomUUID(), eventId, open,
       randomUUID(), eventId, open,
       randomUUID(), eventId, open,
       randomUUID(), eventId, open,

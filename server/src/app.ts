@@ -50,7 +50,17 @@ export function createApp(
       credentials: true,
     }),
   );
-  app.use(express.json({ limit: "256kb" }));
+  app.use(
+    express.json({
+      limit: "256kb",
+      verify(req, _res, buf) {
+        const url = req.url ?? "";
+        if (url.includes("/paystack/webhook")) {
+          (req as Request & { rawBody?: Buffer }).rawBody = Buffer.from(buf);
+        }
+      },
+    }),
+  );
   app.use(cookieParser());
   app.use(csrfMiddleware(config));
   app.use(loadUser(pool));

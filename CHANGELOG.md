@@ -6,6 +6,14 @@ All notable changes to Sherehe are documented in this file.
 
 ### Added
 
+- **Test Ticket** at KSh 5 (code `test`, 10 seats, on sale now) for a live Paystack prompt. Inventory pool is 310.
+
+### Added
+
+- M-Pesa STK via Paystack (`PAYMENT_PROVIDER=paystack`, `PAYSTACK_SECRET_KEY`). Charge uses the guest phone; settlement till stays in the Paystack dashboard. Webhook `POST /v1/payments/paystack/webhook` is HMAC-checked, then re-confirmed with transaction verify (amount must match the order).
+
+### Added
+
 - Production readiness: live M-Pesa callbacks re-confirm via STK Query; production mock STK requires `MPESA_ALLOW_MOCK=true`; staff **Refund** voids unused tickets (`006_order_refunded.sql`); `/privacy` and `/terms`; readiness `/health` (DB + Redis); broader rate limits; CI `npm audit` + gitleaks; HTTP integration tests.
 - Go-live checklist and Neon restore notes in the README.
 

@@ -227,7 +227,7 @@ export function staffRouter(pool: Pool, config: Config): Router {
         throw err;
       }
       // STK credentials alone cannot reverse M-Pesa; ops reverse in Daraja with the receipt.
-      if (config.MPESA_MODE === "live") {
+      if (config.PAYMENT_PROVIDER !== "mock") {
         log("info", "refund_mpesa_manual", {
           orderId: id.data.slice(0, 8),
           receipt: result.receipt ? String(result.receipt).slice(0, 16) : null,
@@ -245,9 +245,11 @@ export function staffRouter(pool: Pool, config: Config): Router {
         ticketsVoided: result.ticketsVoided,
         totalKsh: result.totalKsh,
         mpesa:
-          config.MPESA_MODE === "live"
-            ? "manual_daraja_reverse"
-            : "local_mock",
+          config.PAYMENT_PROVIDER === "paystack"
+            ? "manual_paystack_refund"
+            : config.PAYMENT_PROVIDER === "daraja"
+              ? "manual_daraja_reverse"
+              : "local_mock",
         receipt: result.receipt,
       });
     } catch (err) {
@@ -446,7 +448,7 @@ export function staffRouter(pool: Pool, config: Config): Router {
   r.patch("/ticket-types/:code", async (req, res, next) => {
     try {
       const code = z
-        .enum(["early_bird", "rush", "regular", "vip", "viip", "group", "flash"])
+        .enum(["early_bird", "rush", "regular", "vip", "viip", "group", "flash", "test"])
         .safeParse(req.params["code"]);
       const body = z
         .object({

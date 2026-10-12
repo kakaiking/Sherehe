@@ -7,6 +7,7 @@ const LABELS: Record<string, string> = {
   viip: "VIIP",
   group: "Group",
   flash: "Flash",
+  test: "Test",
 };
 
 export function ticketLabel(code: string): string {

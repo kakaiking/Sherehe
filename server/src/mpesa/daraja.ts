@@ -80,6 +80,8 @@ export function parseStkPushResponse(json: unknown): StkPushParsed {
 export type StkQueryParsed = {
   resultCode: string;
   resultDesc: string;
+  /** Paystack verify amount in subunits, when the provider reported one. */
+  paidAmountSubunits?: number;
 };
 
 export function parseStkQueryResponse(json: unknown): StkQueryParsed {

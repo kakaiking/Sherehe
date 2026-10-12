@@ -22,6 +22,8 @@ function testConfig(overrides: Partial<Config> = {}): Config {
     TICKET_SIGNING_SECRET: "integration-ticket-secret",
     COOKIE_SECURE: false,
     MPESA_MODE: "mock",
+    PAYMENT_PROVIDER: "mock",
+    PAYSTACK_SECRET_KEY: undefined,
     MPESA_ALLOW_MOCK: false,
     MPESA_ENV: "sandbox",
     GOOGLE_CLIENT_ID: undefined,
@@ -223,7 +225,11 @@ describe.skipIf(!dbUrl)("HTTP integration", () => {
     const livePool = new Pool(testConfig({ DATABASE_URL: dbUrl! }));
     const liveApp = createApp(
       livePool,
-      testConfig({ DATABASE_URL: dbUrl!, MPESA_MODE: "live" }),
+      testConfig({
+        DATABASE_URL: dbUrl!,
+        MPESA_MODE: "live",
+        PAYMENT_PROVIDER: "daraja",
+      }),
       unpaidStkClient(),
     );
     const liveServer = createServer(liveApp);

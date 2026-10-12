@@ -67,5 +67,30 @@ describe("loadConfig", () => {
     });
     expect(config.MPESA_MODE).toBe("mock");
     expect(config.MPESA_ALLOW_MOCK).toBe(true);
+    expect(config.PAYMENT_PROVIDER).toBe("mock");
+  });
+
+  it("selects Paystack when PAYMENT_PROVIDER=paystack and a secret key is set", () => {
+    const config = loadConfig({
+      ...base,
+      NODE_ENV: "production",
+      CLIENT_ORIGIN: "https://example.vercel.app",
+      KV_REST_API_URL: "https://us1.upstash.io",
+      KV_REST_API_TOKEN: "upstash-token-value",
+      PAYMENT_PROVIDER: "paystack",
+      PAYSTACK_SECRET_KEY: "sk_live_examplekey",
+    });
+    expect(config.PAYMENT_PROVIDER).toBe("paystack");
+  });
+
+  it("rejects Paystack without a secret key", () => {
+    expect(() =>
+      loadConfig({
+        ...base,
+        NODE_ENV: "development",
+        CLIENT_ORIGIN: "http://localhost:5173",
+        PAYMENT_PROVIDER: "paystack",
+      }),
+    ).toThrow(/Invalid environment/);
   });
 });

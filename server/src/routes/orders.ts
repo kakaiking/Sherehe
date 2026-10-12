@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { Router, type Request } from "express";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import type { Pool, RowDataPacket } from "../db.js";
@@ -13,6 +13,7 @@ import {
 } from "../sale/orders.js";
 import { receiptFromCallback, StkCallbackBody } from "../mpesa/callback.js";
 import { stkOutcome } from "../mpesa/daraja.js";
+import { paystackSignatureOk } from "../mpesa/paystack.js";
 import { ticketsPdf } from "../tickets/pdf.js";
 import { productReceiptPdf } from "../tickets/receiptPdf.js";
 import { stubHolderCaption } from "../tickets/holder.js";
@@ -30,6 +31,7 @@ const TicketOrderBody = z.object({
     "viip",
     "group",
     "flash",
+    "test",
   ]),
   qty: z.number().int().min(1).max(20),
 });
@@ -57,6 +59,7 @@ async function applyStkOutcome(
   checkoutRequestId: string,
   resultCode: string,
   receipt: string | null,
+  paidAmountSubunits?: number,
 ): Promise<"paid" | "pending" | "failed"> {
   const outcome = stkOutcome(resultCode);
   const [payRows] = await pool.query<RowDataPacket[]>(
@@ -74,6 +77,20 @@ async function applyStkOutcome(
     return "pending";
   }
   if (outcome === "paid") {
+    if (paidAmountSubunits !== undefined) {
+      const [orderRows] = await pool.query<RowDataPacket[]>(
+        "SELECT total_ksh FROM orders WHERE id = ?",
+        [pay.order_id],
+      );
+      const total = orderRows[0]?.["total_ksh"];
+      const ksh = typeof total === "number" ? total : Number(total);
+      if (!Number.isInteger(ksh) || ksh * 100 !== paidAmountSubunits) {
+        log("warn", "payment_amount_mismatch", {
+          checkoutRequestId: checkoutRequestId.slice(0, 12),
+        });
+        return "pending";
+      }
+    }
     await pool.query(
       "UPDATE payments SET status = 'succeeded', result_code = ?, receipt = ? WHERE checkout_request_id = ?",
       [resultCode, receipt, checkoutRequestId],
@@ -195,6 +212,7 @@ export function ordersRouter(
           phone: payPhone,
           amountKsh: created.totalKsh,
           accountRef: created.orderId.replace(/-/g, "").slice(0, 12),
+          email: user.email,
         });
       } catch {
         await pool.query(
@@ -219,7 +237,7 @@ export function ordersRouter(
           stkRes.merchantRequestId,
         ],
       );
-      if (config.MPESA_MODE === "mock") {
+      if (config.PAYMENT_PROVIDER === "mock") {
         await applyStkOutcome(
           pool,
           config,
@@ -233,7 +251,7 @@ export function ordersRouter(
         totalKsh: created.totalKsh,
         holdExpiresAt: created.holdExpiresAt,
         payment: {
-          mode: config.MPESA_MODE,
+          mode: config.PAYMENT_PROVIDER === "mock" ? "mock" : "live",
           checkoutRequestId: stkRes.checkoutRequestId,
         },
       });
@@ -423,6 +441,7 @@ export function ordersRouter(
         pay.checkout_request_id,
         queried.resultCode,
         queried.resultDesc.slice(0, 64) || null,
+        queried.paidAmountSubunits,
       );
       res.json({ status });
     } catch (err) {
@@ -512,7 +531,7 @@ export function mpesaCallbackRouter(
         cb.ResultCode === 0 ? receiptFromCallback(parsed.data) : null;
 
       // Live: never trust the callback body alone — re-confirm via STK Query.
-      if (config.MPESA_MODE === "live" && cb.ResultCode === 0) {
+      if (config.PAYMENT_PROVIDER === "daraja" && cb.ResultCode === 0) {
         try {
           const queried = await stk.query(cb.CheckoutRequestID);
           if (stkOutcome(queried.resultCode) !== "paid") {
@@ -542,6 +561,43 @@ export function mpesaCallbackRouter(
         receipt,
       );
       res.json({ ResultCode: 0, ResultDesc: "Accepted" });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  r.post("/paystack/webhook", async (req, res, next) => {
+    try {
+      if (config.PAYMENT_PROVIDER !== "paystack" || !config.PAYSTACK_SECRET_KEY) {
+        res.status(404).json({ status: "ignored" });
+        return;
+      }
+      const raw = (req as Request & { rawBody?: Buffer }).rawBody;
+      const signature = req.header("x-paystack-signature");
+      if (!raw || !paystackSignatureOk(raw, signature, config.PAYSTACK_SECRET_KEY)) {
+        log("warn", "paystack_webhook_bad_signature", {});
+        res.status(401).json({ status: "rejected" });
+        return;
+      }
+      const body = req.body as {
+        event?: string;
+        data?: { reference?: string };
+      };
+      const reference = body.data?.reference;
+      if (!reference || (body.event !== "charge.success" && body.event !== "charge.failed")) {
+        res.json({ status: "ignored" });
+        return;
+      }
+      const queried = await stk.query(reference);
+      await applyStkOutcome(
+        pool,
+        config,
+        reference,
+        queried.resultCode,
+        queried.resultDesc.slice(0, 64) || null,
+        queried.paidAmountSubunits,
+      );
+      res.json({ status: "ok" });
     } catch (err) {
       next(err);
     }

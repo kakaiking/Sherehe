@@ -11,7 +11,7 @@ if (!process.env["VERCEL"]) {
 import { loadConfig } from "./config.js";
 import { createPool } from "./db.js";
 import { createApp } from "./app.js";
-import { liveStkClient, mockStkClient } from "./mpesa/client.js";
+import { stkClientFor } from "./mpesa/factory.js";
 import { log } from "./log.js";
 import { migrateAndSeed } from "./migrate.js";
 import { createRedis, withMigrateLock } from "./redis.js";
@@ -19,17 +19,7 @@ import { createRedis, withMigrateLock } from "./redis.js";
 const config = loadConfig();
 const pool = createPool(config);
 const redis = createRedis(config);
-const stk =
-  config.MPESA_MODE === "live"
-    ? liveStkClient({
-        consumerKey: config.MPESA_CONSUMER_KEY ?? "",
-        consumerSecret: config.MPESA_CONSUMER_SECRET ?? "",
-        shortcode: config.MPESA_SHORTCODE ?? "",
-        passkey: config.MPESA_PASSKEY ?? "",
-        callbackUrl: config.MPESA_CALLBACK_URL ?? "",
-        env: config.MPESA_ENV,
-      })
-    : mockStkClient();
+const stk = stkClientFor(config, pool);
 
 const app = createApp(pool, config, stk, redis);
 const server = app.listen(config.PORT, () => {

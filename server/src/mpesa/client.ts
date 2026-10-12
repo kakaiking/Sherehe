@@ -12,6 +12,8 @@ export type StkPushInput = {
   phone: string;
   amountKsh: number;
   accountRef: string;
+  /** Required for Paystack charge. Daraja ignores it. */
+  email?: string;
 };
 
 export type StkPushResult = StkPushParsed;

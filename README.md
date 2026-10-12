@@ -1,6 +1,6 @@
 # Sherehe
 
-Last updated: 2026-09-21
+Last updated: 2026-10-12 05:46 AM CDT
 
 Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Event ticketing only.
 
@@ -71,7 +71,7 @@ Local checks (same as CI):
 bash scripts/ci.sh
 ```
 
-Buy a ticket while signed in: pick, quantity, **Receive Prompt**, then download the PDF. A group ticket is one QR for five people. Download stamps `stub_downloaded_at` on the paid order, opens **Shop** right away while the PDF saves in the background, and shows a success snackbar there. A later **Receive Prompt** asks to confirm another ticket if that stamp is already on file. With `MPESA_MODE=mock`, Daraja is skipped and the order is marked paid as soon as the STK step succeeds. Live mode uses Safaricom Daraja (OAuth token, STK Push, STK Query, and the HTTPS callback).
+Buy a ticket while signed in: pick, quantity, **Receive Prompt**, then download the PDF. A group ticket is one QR for five people. Download stamps `stub_downloaded_at` on the paid order, opens **Shop** right away while the PDF saves in the background, and shows a success snackbar there. A later **Receive Prompt** asks to confirm another ticket if that stamp is already on file. With `PAYMENT_PROVIDER=mock` (the default, also `MPESA_MODE=mock`), the prompt is skipped and the order is marked paid as soon as checkout succeeds. `PAYMENT_PROVIDER=paystack` sends a real M-Pesa STK through Paystack and confirms it with transaction verify plus the signed webhook. `PAYMENT_PROVIDER=daraja` (or `MPESA_MODE=live` with no provider set) uses Safaricom Daraja directly.
 
 ## Environment
 
@@ -86,7 +86,9 @@ Buy a ticket while signed in: pick, quantity, **Receive Prompt**, then download 
 | `STAFF_*` | Optional first staff user on seed; `STAFF_EMAIL` should match the Google account used to sign in |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth web client (required for sign-in) |
 | `GOOGLE_REDIRECT_URI` | Optional override; default `{CLIENT_ORIGIN}/v1/auth/google/callback` |
-| `MPESA_MODE` | `mock` or `live` |
+| `PAYMENT_PROVIDER` | `mock` (default), `paystack`, or `daraja`. Unset + `MPESA_MODE=live` means Daraja |
+| `PAYSTACK_SECRET_KEY` | Paystack secret (`sk_live_` / `sk_test_`). Required for `paystack`. Settlement till is set in the Paystack dashboard |
+| `MPESA_MODE` | `mock` or `live` (legacy switch; live means Daraja when `PAYMENT_PROVIDER` is unset) |
 | `MPESA_ALLOW_MOCK` | Required as `true` when production still uses mock STK (free tickets). Unset before live sales |
 | `MPESA_CONSUMER_KEY` / `MPESA_CONSUMER_SECRET` | Daraja app credentials (required when live) |
 | `MPESA_SHORTCODE` / `MPESA_PASSKEY` | Paybill/till shortcode and STK passkey (required when live) |
@@ -133,10 +135,10 @@ Schema migrate/seed runs on the first serverless cold start (locked in Upstash; 
 
 1. Confirm Upstash Redis env (`UPSTASH_REDIS_REST_*` or `KV_REST_API_*`) is set on Vercel.
 2. Confirm Google OAuth origin + `/v1/auth/google/callback` for the production host.
-3. Set Daraja live (or sandbox) credentials: `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, `MPESA_CALLBACK_URL=https://<host>/v1/payments/mpesa/callback`, `MPESA_ENV`.
-4. Set `MPESA_MODE=live` and **remove** `MPESA_ALLOW_MOCK`.
-5. Smoke one real STK Push (small amount), confirm callback + STK Query settle the order, download the PDF, and scan at Admin → Scan.
-6. Staff refund voids unused tickets in-app; reverse the M-Pesa money in the Daraja portal using the receipt when live.
+3. Paystack (preferred): in the Paystack dashboard set the settlement account to your M-Pesa till, then set `PAYMENT_PROVIDER=paystack` and `PAYSTACK_SECRET_KEY`. Add webhook `https://<host>/v1/payments/paystack/webhook` for `charge.success`. **Remove** `MPESA_ALLOW_MOCK`.
+4. Or Daraja: set `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, `MPESA_CALLBACK_URL=https://<host>/v1/payments/mpesa/callback`, `MPESA_ENV`, and `PAYMENT_PROVIDER=daraja` (or `MPESA_MODE=live`). **Remove** `MPESA_ALLOW_MOCK`.
+5. Smoke one real STK Push (small amount), confirm the order settles, download the PDF, and scan at Admin → Scan.
+6. Staff refund voids unused tickets in-app. Reverse the money in Paystack (or the Daraja portal) using the receipt.
 
 ### Backups (Neon)
 

@@ -51,6 +51,13 @@ const EnvSchema = z.object({
     .or(z.literal(""))
     .transform((v) => (v === "" || v === undefined ? undefined : v)),
   MPESA_MODE: z.enum(["mock", "live"]).default("mock"),
+  /**
+   * Who sends the M-Pesa prompt. `paystack` charges via Paystack mobile money
+   * (settlement till is configured in the Paystack dashboard, not here).
+   * When unset, `MPESA_MODE=live` means Daraja and anything else means mock.
+   */
+  PAYMENT_PROVIDER: z.enum(["mock", "daraja", "paystack"]),
+  PAYSTACK_SECRET_KEY: z.string().max(200).optional(),
   /** Required when production still runs mock STK (free tickets). Unset before live sales. */
   MPESA_ALLOW_MOCK: z.boolean().default(false),
   MPESA_CONSUMER_KEY: z.string().max(200).optional(),
@@ -68,16 +75,27 @@ const EnvSchema = z.object({
         message: "Upstash Redis REST URL and token are required in production",
       });
     }
-    if (data.MPESA_MODE === "mock" && !data.MPESA_ALLOW_MOCK) {
+    if (data.PAYMENT_PROVIDER === "mock" && !data.MPESA_ALLOW_MOCK) {
       ctx.addIssue({
         code: "custom",
-        path: ["MPESA_MODE"],
+        path: ["PAYMENT_PROVIDER"],
         message:
-          "production mock STK requires MPESA_ALLOW_MOCK=true (or set MPESA_MODE=live)",
+          "production mock STK requires MPESA_ALLOW_MOCK=true (or set PAYMENT_PROVIDER=paystack or daraja)",
       });
     }
   }
-  if (data.MPESA_MODE !== "live") return;
+  if (data.PAYMENT_PROVIDER === "paystack") {
+    const key = data.PAYSTACK_SECRET_KEY ?? "";
+    if (!/^sk_(live|test)_[A-Za-z0-9]+$/.test(key)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["PAYSTACK_SECRET_KEY"],
+        message: "required sk_live_ or sk_test_ key when PAYMENT_PROVIDER=paystack",
+      });
+    }
+    return;
+  }
+  if (data.PAYMENT_PROVIDER !== "daraja") return;
   const required: Array<[string, string | undefined]> = [
     ["MPESA_CONSUMER_KEY", data.MPESA_CONSUMER_KEY],
     ["MPESA_CONSUMER_SECRET", data.MPESA_CONSUMER_SECRET],
@@ -90,7 +108,7 @@ const EnvSchema = z.object({
       ctx.addIssue({
         code: "custom",
         path: [key],
-        message: "required when MPESA_MODE=live",
+        message: "required when PAYMENT_PROVIDER=daraja",
       });
     }
   }
@@ -112,11 +130,22 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
       ? cookieRaw === "true"
       : env["NODE_ENV"] === "production" || Boolean(env["VERCEL"]);
   const allowMockRaw = env["MPESA_ALLOW_MOCK"]?.trim();
+  const explicitProvider = env["PAYMENT_PROVIDER"]?.trim();
+  const paymentProvider =
+    explicitProvider === "paystack" ||
+    explicitProvider === "daraja" ||
+    explicitProvider === "mock"
+      ? explicitProvider
+      : env["MPESA_MODE"] === "live"
+        ? "daraja"
+        : "mock";
   const parsed = EnvSchema.safeParse({
     ...env,
     CLIENT_ORIGIN: defaultClientOrigin(env),
     COOKIE_SECURE: cookieSecure,
     MPESA_ALLOW_MOCK: allowMockRaw === "true",
+    PAYMENT_PROVIDER: paymentProvider,
+    PAYSTACK_SECRET_KEY: optionalSecret.parse(env["PAYSTACK_SECRET_KEY"]),
     UPSTASH_REDIS_REST_URL: upstashUrl(env),
     UPSTASH_REDIS_REST_TOKEN: upstashToken(env),
   });
