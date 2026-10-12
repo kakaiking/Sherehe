@@ -86,6 +86,8 @@ describe("OrderPage ticket stub", () => {
       ).toBe(true);
     });
     expect(await screen.findByRole("status")).toBeTruthy();
-    expect(screen.getByRole("status").textContent).toBe("Ticket downloaded.");
+    expect(screen.getByRole("status").querySelector(".snackbar-message")?.textContent).toBe(
+      "Ticket downloaded.",
+    );
   });
 });

@@ -45,4 +45,10 @@ git remote get-url origin >/dev/null 2>&1 || die "git remote origin is not set"
 git push -u origin HEAD
 
 printf 'Deploying production…\n' >&2
-npx vercel deploy --prod --yes
+# Prefer the installed CLI. `npx vercel` can keep a stale cached release
+# (59.x returned "Not authorized" against the current CLI token).
+if command -v vercel >/dev/null 2>&1; then
+  vercel deploy --prod --yes
+else
+  npx --yes vercel@latest deploy --prod --yes
+fi

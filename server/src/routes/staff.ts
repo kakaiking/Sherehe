@@ -19,7 +19,7 @@ import {
 } from "../eventPartners.js";
 import { normalizeKenyanPhone } from "../phone.js";
 import { decodeUpload } from "../partners/uploads.js";
-import { attendeeCount, loadEventId } from "../sale/orders.js";
+import { attendeeCount, loadEventId, refundPaidTicketOrder } from "../sale/orders.js";
 import {
   ATTENDEE_TARGET,
   assertCapacityPool,
@@ -36,6 +36,7 @@ import { verifyTicketSignature } from "../tickets/hmac.js";
 import { loadTicketPass } from "../tickets/passLookup.js";
 import { ticketLabel } from "../tickets/label.js";
 import { stubHolderCaption } from "../tickets/holder.js";
+import { log } from "../log.js";
 
 const UploadPart = z.object({
   mime: z.string().min(3).max(64),
@@ -84,47 +85,6 @@ export function staffRouter(pool: Pool, config: Config): Router {
       const [windows] = await pool.query<RowDataPacket[]>(
         "SELECT ticket_code, starts_at, ends_at FROM sale_windows WHERE event_id = ? ORDER BY starts_at",
         [eventId],
-      );
-      const [partners] = await pool.query<RowDataPacket[]>(
-        `SELECT id, kind, company_name, contact_name, service_offered, member_count, status,
-                ticket_order_id, created_at, reviewed_at,
-                (logo_data IS NOT NULL) AS has_logo,
-                (contract_data IS NOT NULL) AS has_contract
-         FROM partner_applications
-         ORDER BY
-           CASE status WHEN 'pending' THEN 0 WHEN 'confirmed' THEN 1 ELSE 2 END,
-           created_at DESC
-         LIMIT 100`,
-      );
-      const [vendors] = await pool.query<RowDataPacket[]>(
-        `SELECT v.id,
-                COALESCE(va.company_name, v.display_name, v.email) AS company_name,
-                va.category,
-                va.status,
-                p.name AS package_name,
-                p.fee_ksh,
-                va.id AS application_id
-         FROM vendors v
-         LEFT JOIN LATERAL (
-           SELECT id, company_name, category, status, package_id, created_at
-           FROM vendor_applications
-           WHERE vendor_id = v.id
-           ORDER BY created_at DESC
-           LIMIT 1
-         ) va ON TRUE
-         LEFT JOIN vendor_packages p ON p.id = va.package_id
-         ORDER BY
-           CASE va.status
-             WHEN 'pending' THEN 0
-             WHEN 'awaiting_payment' THEN 1
-             WHEN 'paid' THEN 2
-             ELSE 3
-           END,
-           COALESCE(va.created_at, v.created_at) DESC
-         LIMIT 100`,
-      );
-      const [products] = await pool.query<RowDataPacket[]>(
-        "SELECT slug, name, stock, price_ksh FROM products",
       );
       const [ticketStats] = await pool.query<RowDataPacket[]>(
         `SELECT
@@ -177,10 +137,6 @@ export function staffRouter(pool: Pool, config: Config): Router {
       const stats = ticketStats[0] as
         | { paid_orders: number; revenue_ksh: number }
         | undefined;
-      const pendingPartners = partners.filter((p) => p["status"] === "pending").length;
-      const pendingVendors = vendors.filter(
-        (v) => v["status"] === "pending" || v["status"] === "awaiting_payment",
-      ).length;
       const [partnerCountRows] = await pool.query<RowDataPacket[]>(
         "SELECT COUNT(*)::int AS n FROM event_partners WHERE event_id = ?",
         [eventId],
@@ -199,31 +155,6 @@ export function staffRouter(pool: Pool, config: Config): Router {
         flashDates: normalizeFlashDates(event?.["flash_dates"]),
         canArmFlash: count < ATTENDEE_TARGET,
         windows,
-        partners: partners.map((p) => ({
-          id: p["id"],
-          kind: p["kind"],
-          company_name: p["company_name"],
-          contact_name: p["contact_name"],
-          service_offered: p["service_offered"] ?? "",
-          member_count: Number(p["member_count"]),
-          status: p["status"],
-          ticket_order_id: p["ticket_order_id"] ?? null,
-          claimed: Boolean(p["ticket_order_id"]),
-          has_logo: Boolean(p["has_logo"]),
-          has_contract: Boolean(p["has_contract"]),
-          created_at: p["created_at"],
-          reviewed_at: p["reviewed_at"] ?? null,
-        })),
-        vendors: vendors.map((v) => ({
-          id: v["id"],
-          company_name: v["company_name"],
-          category: v["category"] ?? null,
-          status: v["status"] ?? "registered",
-          package_name: v["package_name"] ?? null,
-          fee_ksh: v["fee_ksh"] != null ? Number(v["fee_ksh"]) : null,
-          application_id: v["application_id"] ?? null,
-        })),
-        products,
         ticketBuyers: ticketBuyers.map((b) => ({
           id: b["id"],
           display_name: b["display_name"] ?? null,
@@ -242,8 +173,6 @@ export function staffRouter(pool: Pool, config: Config): Router {
           sold: Number(t["sold"] ?? 0),
         })),
         overview: {
-          pendingPartners,
-          pendingVendors,
           attendeeCount: count,
           attendeeTarget: ATTENDEE_TARGET,
           paidTicketOrders: Number(stats?.paid_orders ?? 0),
@@ -256,7 +185,7 @@ export function staffRouter(pool: Pool, config: Config): Router {
     }
   });
 
-  r.get("/vendors/:id", async (req, res, next) => {
+  r.post("/orders/:id/refund", async (req, res, next) => {
     try {
       const id = z.string().uuid().safeParse(req.params["id"]);
       if (!id.success) {
@@ -264,99 +193,62 @@ export function staffRouter(pool: Pool, config: Config): Router {
           type: "https://httpstatuses.com/422",
           title: "Unprocessable Entity",
           status: 422,
-          detail: "Invalid vendor id.",
+          detail: "Invalid order id.",
         });
         return;
       }
-      const [vendorRows] = await pool.query<RowDataPacket[]>(
-        `SELECT v.id, v.email, v.display_name, v.phone,
-                COALESCE(va.company_name, v.display_name, v.email) AS company_name,
-                va.category, va.status AS application_status, va.order_id,
-                p.name AS package_name, p.fee_ksh
-         FROM vendors v
-         LEFT JOIN LATERAL (
-           SELECT company_name, category, status, order_id, package_id, created_at
-           FROM vendor_applications
-           WHERE vendor_id = v.id
-           ORDER BY created_at DESC
-           LIMIT 1
-         ) va ON TRUE
-         LEFT JOIN vendor_packages p ON p.id = va.package_id
-         WHERE v.id = ?`,
-        [id.data],
-      );
-      const vendor = vendorRows[0];
-      if (!vendor) {
-        res.status(404).json({
-          type: "https://httpstatuses.com/404",
-          title: "Not Found",
-          status: 404,
-          detail: "Vendor not found.",
-        });
-        return;
-      }
-
-      let packagePaidKsh = 0;
-      let packageOrderStatus: string | null = null;
-      if (vendor["order_id"]) {
-        const [orderRows] = await pool.query<RowDataPacket[]>(
-          "SELECT status, total_ksh FROM orders WHERE id = ?",
-          [vendor["order_id"]],
-        );
-        const order = orderRows[0] as
-          | { status: string; total_ksh: number }
-          | undefined;
-        if (order) {
-          packageOrderStatus = order.status;
-          if (order.status === "paid") packagePaidKsh = Number(order.total_ksh);
+      let result;
+      try {
+        result = await refundPaidTicketOrder(pool, id.data);
+      } catch (err) {
+        const name = (err as Error).message;
+        const mapped: Record<string, { status: number; detail: string }> = {
+          order_not_found: { status: 404, detail: "Order not found." },
+          already_refunded: { status: 409, detail: "That order is already refunded." },
+          order_not_paid: {
+            status: 409,
+            detail: "Only paid ticket orders can be refunded.",
+          },
+          ticket_already_used: {
+            status: 409,
+            detail: "A ticket on this order was already scanned. Refund blocked.",
+          },
+        };
+        const hit = mapped[name];
+        if (hit) {
+          res.status(hit.status).json({
+            type: `https://httpstatuses.com/${hit.status}`,
+            title: hit.status === 404 ? "Not Found" : "Conflict",
+            status: hit.status,
+            detail: hit.detail,
+          });
+          return;
         }
+        throw err;
       }
-
-      const [productRows] = await pool.query<RowDataPacket[]>(
-        `SELECT p.slug, p.name, p.stock, p.price_ksh,
-                COALESCE(s.units_sold, 0) AS units_sold,
-                COALESCE(s.sales_ksh, 0) AS sales_ksh
-         FROM products p
-         LEFT JOIN (
-           SELECT oi.sku_code,
-                  SUM(oi.qty) AS units_sold,
-                  SUM(oi.qty * oi.unit_price_ksh) AS sales_ksh
-           FROM order_items oi
-           JOIN orders o ON o.id = oi.order_id
-           WHERE oi.sku_kind = 'product' AND o.status = 'paid'
-           GROUP BY oi.sku_code
-         ) s ON s.sku_code = p.slug
-         WHERE p.owner_id = ?
-         ORDER BY p.name`,
-        [id.data],
-      );
-      const products = productRows.map((p) => ({
-        slug: String(p["slug"]),
-        name: String(p["name"]),
-        stock: Number(p["stock"] ?? 0),
-        price_ksh: Number(p["price_ksh"] ?? 0),
-        units_sold: Number(p["units_sold"] ?? 0),
-        sales_ksh: Number(p["sales_ksh"] ?? 0),
-      }));
-      const productSalesKsh = products.reduce((sum, p) => sum + p.sales_ksh, 0);
-
+      // STK credentials alone cannot reverse M-Pesa; ops reverse in Daraja with the receipt.
+      if (config.MPESA_MODE === "live") {
+        log("info", "refund_mpesa_manual", {
+          orderId: id.data.slice(0, 8),
+          receipt: result.receipt ? String(result.receipt).slice(0, 16) : null,
+          totalKsh: result.totalKsh,
+          staffId: req.user?.id.slice(0, 8) ?? null,
+        });
+      } else {
+        log("info", "refund_mock", {
+          orderId: id.data.slice(0, 8),
+          ticketsVoided: result.ticketsVoided,
+        });
+      }
       res.json({
-        id: vendor["id"],
-        company_name: vendor["company_name"],
-        email: vendor["email"],
-        phone: vendor["phone"] ?? null,
-        category: vendor["category"] ?? null,
-        application_status: vendor["application_status"] ?? "registered",
-        package_name: vendor["package_name"] ?? null,
-        package_fee_ksh:
-          vendor["fee_ksh"] != null ? Number(vendor["fee_ksh"]) : null,
-        standing: {
-          package_paid_ksh: packagePaidKsh,
-          package_order_status: packageOrderStatus,
-          product_sales_ksh: productSalesKsh,
-          money_received_ksh: packagePaidKsh + productSalesKsh,
-        },
-        products,
+        refunded: true,
+        ticketsVoided: result.ticketsVoided,
+        totalKsh: result.totalKsh,
+        mpesa:
+          config.MPESA_MODE === "live"
+            ? "manual_daraja_reverse"
+            : "local_mock",
+        receipt: result.receipt,
       });
     } catch (err) {
       next(err);
@@ -611,44 +503,6 @@ export function staffRouter(pool: Pool, config: Config): Router {
     }
   });
 
-  r.post("/partners/:id/review", async (req, res, next) => {
-    try {
-      const id = z.string().uuid().safeParse(req.params["id"]);
-      const body = z.object({ status: z.enum(["confirmed", "rejected"]) }).safeParse(req.body);
-      if (!id.success || !body.success) {
-        res.status(422).json({
-          type: "https://httpstatuses.com/422",
-          title: "Unprocessable Entity",
-          status: 422,
-          detail: "Invalid review payload.",
-        });
-        return;
-      }
-      await pool.query(
-        "UPDATE partner_applications SET status = ?, reviewed_at = NOW() WHERE id = ?",
-        [body.data.status, id.data],
-      );
-      res.json({ id: id.data, status: body.data.status });
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  r.get("/partners/:id/logo", async (req, res, next) => {
-    try {
-      await sendPartnerAsset(pool, req, res, "logo");
-    } catch (err) {
-      next(err);
-    }
-  });
-
-  r.get("/partners/:id/contract", async (req, res, next) => {
-    try {
-      await sendPartnerAsset(pool, req, res, "contract");
-    } catch (err) {
-      next(err);
-    }
-  });
 
   r.get("/tickets/scans", async (_req, res, next) => {
     try {
@@ -1142,48 +996,6 @@ async function sendEventPartnerLogo(
   res.send(bytes);
 }
 
-async function sendPartnerAsset(
-  pool: Pool,
-  req: Request,
-  res: Response,
-  kind: "logo" | "contract",
-): Promise<void> {
-  const id = z.string().uuid().safeParse(req.params["id"]);
-  if (!id.success) {
-    res.status(422).json({
-      type: "https://httpstatuses.com/422",
-      title: "Unprocessable Entity",
-      status: 422,
-      detail: "Invalid partner application id.",
-    });
-    return;
-  }
-  const mimeCol = kind === "logo" ? "logo_mime" : "contract_mime";
-  const dataCol = kind === "logo" ? "logo_data" : "contract_data";
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `SELECT ${mimeCol} AS mime, ${dataCol} AS data FROM partner_applications WHERE id = ?`,
-    [id.data],
-  );
-  const row = rows[0] as { mime: string | null; data: Buffer | null } | undefined;
-  if (!row?.mime || !row.data) {
-    res.status(404).json({
-      type: "https://httpstatuses.com/404",
-      title: "Not Found",
-      status: 404,
-      detail: kind === "logo" ? "Logo not found." : "Contract not found.",
-    });
-    return;
-  }
-  const bytes = Buffer.isBuffer(row.data) ? row.data : Buffer.from(row.data);
-  const filename =
-    kind === "logo"
-      ? `partner-logo.${extForMime(row.mime)}`
-      : "partner-terms.pdf";
-  res.setHeader("Content-Type", row.mime);
-  res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
-  res.setHeader("Cache-Control", "private, max-age=60");
-  res.send(bytes);
-}
 
 function extForMime(mime: string): string {
   if (mime === "image/png") return "png";

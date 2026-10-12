@@ -104,6 +104,11 @@ export function AccountPage({
           ))}
         </ul>
       )}
+      <p className="legal-links">
+        <Link to="/privacy">Privacy</Link>
+        <span aria-hidden="true"> · </span>
+        <Link to="/terms">Terms</Link>
+      </p>
     </>
   );
 }

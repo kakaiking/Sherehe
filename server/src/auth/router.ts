@@ -5,7 +5,6 @@ import { isUniqueViolation } from "../db.js";
 import { randomUUID } from "node:crypto";
 import type { Config } from "../config.js";
 import { googleOAuthConfig } from "../config.js";
-import { hashPassword, verifyPassword } from "./password.js";
 import { normalizeKenyanPhone } from "../phone.js";
 import { createSession, destroySession } from "./session.js";
 import { log } from "../log.js";
@@ -35,17 +34,6 @@ import {
   type AccountTable,
 } from "./accounts.js";
 import { isStaffEmail } from "./staffEmail.js";
-
-const RegisterBody = z.object({
-  email: z.string().email().max(255),
-  phone: z.string().min(9).max(20),
-  password: z.string().min(10).max(200),
-});
-
-const LoginBody = z.object({
-  email: z.string().email().max(255),
-  password: z.string().min(1).max(200),
-});
 
 const PhoneBody = z.object({
   phone: z.string().min(9).max(20),
@@ -370,111 +358,22 @@ export function authRouter(pool: Pool, config: Config): Router {
     }
   });
 
-  r.post("/register", async (req, res, next) => {
-    try {
-      const parsed = RegisterBody.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(422).json({
-          type: "https://httpstatuses.com/422",
-          title: "Unprocessable Entity",
-          status: 422,
-          detail: "Check email, phone, and password (10+ characters).",
-        });
-        return;
-      }
-      const phone = normalizeKenyanPhone(parsed.data.phone);
-      if (!phone) {
-        res.status(422).json({
-          type: "https://httpstatuses.com/422",
-          title: "Unprocessable Entity",
-          status: 422,
-          detail: "Use a Kenyan mobile number.",
-        });
-        return;
-      }
-      const id = randomUUID();
-      const passwordHash = await hashPassword(parsed.data.password);
-      try {
-        await pool.query(
-          "INSERT INTO users (id, email, phone, password_hash, role) VALUES (?, ?, ?, ?, 'customer')",
-          [id, parsed.data.email.toLowerCase(), phone, passwordHash],
-        );
-      } catch (err) {
-        if (isUniqueViolation(err)) {
-          res.status(409).json({
-            type: "https://httpstatuses.com/409",
-            title: "Conflict",
-            status: 409,
-            detail: "An account with that email or phone already exists.",
-          });
-          return;
-        }
-        throw err;
-      }
-      await createSession(pool, res, config, id, "user", req);
-      res.status(201).json({
-        id,
-        email: parsed.data.email.toLowerCase(),
-        phone,
-        role: "customer",
-        displayName: null,
-        givenName: null,
-      });
-    } catch (err) {
-      next(err);
-    }
+  r.post("/register", (_req, res) => {
+    res.status(410).json({
+      type: "https://httpstatuses.com/410",
+      title: "Gone",
+      status: 410,
+      detail: "Password registration is closed. Continue with Google.",
+    });
   });
 
-  r.post("/login", async (req, res, next) => {
-    try {
-      const parsed = LoginBody.safeParse(req.body);
-      if (!parsed.success) {
-        res.status(422).json({
-          type: "https://httpstatuses.com/422",
-          title: "Unprocessable Entity",
-          status: 422,
-          detail: "Email and password are required.",
-        });
-        return;
-      }
-      const [rows] = await pool.query(
-        "SELECT id, email, phone, password_hash, role, display_name, given_name FROM users WHERE email = ?",
-        [parsed.data.email.toLowerCase()],
-      );
-      const user = (rows as Array<{
-        id: string;
-        email: string;
-        phone: string | null;
-        password_hash: string | null;
-        role: UserRole;
-        display_name: string | null;
-        given_name: string | null;
-      }>)[0];
-      if (
-        !user?.password_hash ||
-        !(await verifyPassword(user.password_hash, parsed.data.password))
-      ) {
-        log("warn", "login_failed", { reason: "invalid_credentials" });
-        res.status(401).json({
-          type: "https://httpstatuses.com/401",
-          title: "Unauthorized",
-          status: 401,
-          detail: "Email or password is incorrect.",
-        });
-        return;
-      }
-      await createSession(pool, res, config, user.id, "user", req);
-      res.json({
-        id: user.id,
-        email: user.email,
-        phone: user.phone,
-        role: user.role,
-        displayName: user.display_name,
-        givenName: user.given_name,
-      });
-    } catch (err) {
-      next(err);
-    }
+  r.post("/login", (_req, res) => {
+    res.status(410).json({
+      type: "https://httpstatuses.com/410",
+      title: "Gone",
+      status: 410,
+      detail: "Password sign-in is closed. Continue with Google.",
+    });
   });
 
   r.post("/logout", async (req, res, next) => {

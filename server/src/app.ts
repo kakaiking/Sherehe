@@ -55,30 +55,56 @@ export function createApp(
   app.use(csrfMiddleware(config));
   app.use(loadUser(pool));
 
-  app.get("/health", (_req, res) => {
-    res.json({ status: "ok" });
+  app.get("/health", async (_req, res) => {
+    const checks: { db: boolean; redis: boolean | "skipped" } = {
+      db: false,
+      redis: redis ? false : "skipped",
+    };
+    try {
+      await pool.query("SELECT 1");
+      checks.db = true;
+    } catch {
+      checks.db = false;
+    }
+    if (redis) {
+      try {
+        const pong = await redis.ping();
+        checks.redis = pong === "PONG" || pong === "pong" || Boolean(pong);
+      } catch {
+        checks.redis = false;
+      }
+    }
+    const ok =
+      checks.db && (checks.redis === "skipped" || checks.redis === true);
+    res.status(ok ? 200 : 503).json({
+      status: ok ? "ok" : "degraded",
+      checks,
+    });
   });
 
-  app.use("/v1/payments", mpesaCallbackRouter(pool, config));
+  const callbackLimiter = pathLimiter(redis, "mpesa-cb", 60);
+  app.use("/v1/payments", callbackLimiter, mpesaCallbackRouter(pool, config, stk));
 
   app.use(requireCsrf);
 
   const authLimiter = pathLimiter(redis, "auth", 30);
   const payLimiter = pathLimiter(redis, "pay", 20);
+  const staffLimiter = pathLimiter(redis, "staff", 60);
+  const passLimiter = pathLimiter(redis, "passes", 120);
 
-  app.use("/v1/auth/login", authLimiter);
-  app.use("/v1/auth/register", authLimiter);
   app.use("/v1/auth/google", authLimiter);
   app.use("/v1/auth", authRouter(pool, config));
   app.use("/v1/catalog", catalogRouter(pool));
   app.use("/v1/orders", payLimiter, ordersRouter(pool, config, stk));
-  app.use("/v1/staff", staffRouter(pool, config));
-  app.use("/v1/passes", passesRouter(pool, config));
+  app.use("/v1/staff", staffLimiter, staffRouter(pool, config));
+  app.use("/v1/passes", passLimiter, passesRouter(pool, config));
   app.use("/v1/account", accountRouter(pool));
 
-  app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
+  app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
     log("error", "unhandled", {
       name: err instanceof Error ? err.name : "unknown",
+      message: err instanceof Error ? err.message.slice(0, 200) : "unknown",
+      route: `${req.method} ${req.path}`.slice(0, 120),
     });
     if (res.headersSent) return;
     res.status(500).json({

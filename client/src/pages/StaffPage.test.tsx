@@ -1,8 +1,12 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { nairobiDateStr } from "../datetime";
 import { SnackbarProvider } from "../snackbar";
 import { StaffPage } from "./StaffPage";
+
+/** A flash day that is selectable today (Nairobi calendar). */
+const FLASH_PICK = nairobiDateStr();
 
 afterEach(() => {
   cleanup();
@@ -424,7 +428,7 @@ describe("StaffPage tickets and attendees", () => {
 
     fireEvent.click(await screen.findByRole("tab", { name: "Tickets" }));
     fireEvent.click(await screen.findByRole("button", { name: "Set flash sale" }));
-    fireEvent.click(await screen.findByRole("gridcell", { name: /2026-09-24$/ }));
+    fireEvent.click(await screen.findByRole("gridcell", { name: new RegExp(`${FLASH_PICK}$`) }));
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     expect(await screen.findByRole("dialog", { name: "Save changes?" })).toBeTruthy();
@@ -469,9 +473,9 @@ describe("StaffPage tickets and attendees", () => {
           ok: true,
           json: async () => ({
             flashEnabled: true,
-            flashDates: ["2026-09-24"],
-            flashStartsAt: "2026-09-23T21:00:00.000Z",
-            flashEndsAt: "2026-09-24T20:59:59.999Z",
+            flashDates: [FLASH_PICK],
+            flashStartsAt: "2026-10-04T21:00:00.000Z",
+            flashEndsAt: "2026-10-05T20:59:59.999Z",
           }),
         });
       }
@@ -482,7 +486,7 @@ describe("StaffPage tickets and attendees", () => {
 
     fireEvent.click(await screen.findByRole("tab", { name: "Tickets" }));
     fireEvent.click(await screen.findByRole("button", { name: "Set flash sale" }));
-    fireEvent.click(await screen.findByRole("gridcell", { name: /2026-09-24$/ }));
+    fireEvent.click(await screen.findByRole("gridcell", { name: new RegExp(`${FLASH_PICK}$`) }));
     fireEvent.click(screen.getByRole("button", { name: "Save flash days" }));
 
     await screen.findByText(/Flash sale days saved/i);
@@ -493,7 +497,7 @@ describe("StaffPage tickets and attendees", () => {
     );
     expect(flashCall).toBeTruthy();
     expect(JSON.parse(String((flashCall?.[1] as RequestInit).body))).toEqual({
-      dates: ["2026-09-24"],
+      dates: [FLASH_PICK],
     });
   });
 

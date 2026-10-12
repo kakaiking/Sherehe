@@ -188,6 +188,7 @@ export function StaffPage({
   const [flashCloseConfirm, setFlashCloseConfirm] = useState(false);
   const [draftFlashDates, setDraftFlashDates] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [refundingId, setRefundingId] = useState<string | null>(null);
   const baseId = useId();
   const flashTitleId = useId();
   const flashSaveTitleId = useId();
@@ -251,6 +252,27 @@ export function StaffPage({
       setError((err as ApiError).detail);
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function refundOrder(orderId: string): Promise<void> {
+    if (
+      !window.confirm(
+        "Refund this order? Unused tickets will be voided. Live M-Pesa money must still be reversed in Daraja.",
+      )
+    ) {
+      return;
+    }
+    setRefundingId(orderId);
+    setError(null);
+    try {
+      await api(`/v1/staff/orders/${orderId}/refund`, { method: "POST" });
+      await reload();
+      show("Order refunded. Tickets voided.");
+    } catch (err) {
+      setError((err as ApiError).detail);
+    } finally {
+      setRefundingId(null);
     }
   }
 
@@ -460,6 +482,14 @@ export function StaffPage({
                             .filter(Boolean)
                             .join(" · ")}
                         </p>
+                        <button
+                          type="button"
+                          className="admin-record-button"
+                          disabled={refundingId === b.id}
+                          onClick={() => void refundOrder(b.id)}
+                        >
+                          {refundingId === b.id ? "Refunding…" : "Refund"}
+                        </button>
                       </li>
                     ))
                   )}

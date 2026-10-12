@@ -26,6 +26,7 @@ describe("loadConfig", () => {
       CLIENT_ORIGIN: "https://example.vercel.app",
       KV_REST_API_URL: "https://us1.upstash.io",
       KV_REST_API_TOKEN: "upstash-token-value",
+      MPESA_ALLOW_MOCK: "true",
     });
     expect(config.UPSTASH_REDIS_REST_URL).toBe("https://us1.upstash.io");
     expect(config.UPSTASH_REDIS_REST_TOKEN).toBe("upstash-token-value");
@@ -39,5 +40,32 @@ describe("loadConfig", () => {
         CLIENT_ORIGIN: "https://example.vercel.app",
       }),
     ).toThrow(/Invalid environment/);
+  });
+
+  it("rejects production mock STK without MPESA_ALLOW_MOCK", () => {
+    expect(() =>
+      loadConfig({
+        ...base,
+        NODE_ENV: "production",
+        CLIENT_ORIGIN: "https://example.vercel.app",
+        KV_REST_API_URL: "https://us1.upstash.io",
+        KV_REST_API_TOKEN: "upstash-token-value",
+        MPESA_MODE: "mock",
+      }),
+    ).toThrow(/Invalid environment/);
+  });
+
+  it("allows production mock STK when MPESA_ALLOW_MOCK=true", () => {
+    const config = loadConfig({
+      ...base,
+      NODE_ENV: "production",
+      CLIENT_ORIGIN: "https://example.vercel.app",
+      KV_REST_API_URL: "https://us1.upstash.io",
+      KV_REST_API_TOKEN: "upstash-token-value",
+      MPESA_MODE: "mock",
+      MPESA_ALLOW_MOCK: "true",
+    });
+    expect(config.MPESA_MODE).toBe("mock");
+    expect(config.MPESA_ALLOW_MOCK).toBe(true);
   });
 });

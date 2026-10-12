@@ -34,5 +34,5 @@ export async function withMigrateLock(
       setTimeout(r, 250);
     });
   }
-  await work();
+  throw new Error("migrate_lock_busy");
 }

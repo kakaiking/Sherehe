@@ -17,6 +17,7 @@ import { HomePage } from "./pages/HomePage";
 import { OrderPage } from "./pages/OrderPage";
 import { PartnersPage } from "./pages/PartnersPage";
 import { PassPage } from "./pages/PassPage";
+import { PrivacyPage, TermsPage } from "./pages/LegalPages";
 import { StaffPage } from "./pages/StaffPage";
 import { TicketsPage } from "./pages/TicketsPage";
 import { GuestLayout } from "./portals/guest/GuestLayout";
@@ -122,11 +123,7 @@ export function App(): ReactElement {
           />
           <Route
             path="/register"
-            element={
-              <PortalChrome brandTo="/guest" brandEvent={false}>
-                <AuthPage onAuth={setUser} />
-              </PortalChrome>
-            }
+            element={<Navigate to="/login" replace />}
           />
           <Route
             path="/admin"
@@ -136,6 +133,22 @@ export function App(): ReactElement {
                 onAuth={setUser}
                 onLogout={() => setUser(null)}
               />
+            }
+          />
+          <Route
+            path="/privacy"
+            element={
+              <PortalChrome brandTo="/guest" brandEvent={false}>
+                <PrivacyPage />
+              </PortalChrome>
+            }
+          />
+          <Route
+            path="/terms"
+            element={
+              <PortalChrome brandTo="/guest" brandEvent={false}>
+                <TermsPage />
+              </PortalChrome>
             }
           />
           <Route

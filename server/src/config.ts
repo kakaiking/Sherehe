@@ -51,6 +51,8 @@ const EnvSchema = z.object({
     .or(z.literal(""))
     .transform((v) => (v === "" || v === undefined ? undefined : v)),
   MPESA_MODE: z.enum(["mock", "live"]).default("mock"),
+  /** Required when production still runs mock STK (free tickets). Unset before live sales. */
+  MPESA_ALLOW_MOCK: z.boolean().default(false),
   MPESA_CONSUMER_KEY: z.string().max(200).optional(),
   MPESA_CONSUMER_SECRET: z.string().max(200).optional(),
   MPESA_SHORTCODE: z.string().max(20).optional(),
@@ -64,6 +66,14 @@ const EnvSchema = z.object({
         code: "custom",
         path: ["UPSTASH_REDIS_REST_URL"],
         message: "Upstash Redis REST URL and token are required in production",
+      });
+    }
+    if (data.MPESA_MODE === "mock" && !data.MPESA_ALLOW_MOCK) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["MPESA_MODE"],
+        message:
+          "production mock STK requires MPESA_ALLOW_MOCK=true (or set MPESA_MODE=live)",
       });
     }
   }
@@ -101,10 +111,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     cookieRaw === "true" || cookieRaw === "false"
       ? cookieRaw === "true"
       : env["NODE_ENV"] === "production" || Boolean(env["VERCEL"]);
+  const allowMockRaw = env["MPESA_ALLOW_MOCK"]?.trim();
   const parsed = EnvSchema.safeParse({
     ...env,
     CLIENT_ORIGIN: defaultClientOrigin(env),
     COOKIE_SECURE: cookieSecure,
+    MPESA_ALLOW_MOCK: allowMockRaw === "true",
     UPSTASH_REDIS_REST_URL: upstashUrl(env),
     UPSTASH_REDIS_REST_TOKEN: upstashToken(env),
   });

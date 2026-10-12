@@ -12,6 +12,8 @@ Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at
 - [Usage](#usage)
 - [Environment](#environment)
 - [Deploy](#deploy)
+- [Go-live checklist](#go-live-checklist)
+- [Backups (Neon)](#backups-neon)
 - [Architecture](#architecture)
 - [Troubleshooting](#troubleshooting)
 - [Known limitations](#known-limitations)
@@ -85,6 +87,7 @@ Buy a ticket while signed in: pick, quantity, **Receive Prompt**, then download 
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth web client (required for sign-in) |
 | `GOOGLE_REDIRECT_URI` | Optional override; default `{CLIENT_ORIGIN}/v1/auth/google/callback` |
 | `MPESA_MODE` | `mock` or `live` |
+| `MPESA_ALLOW_MOCK` | Required as `true` when production still uses mock STK (free tickets). Unset before live sales |
 | `MPESA_CONSUMER_KEY` / `MPESA_CONSUMER_SECRET` | Daraja app credentials (required when live) |
 | `MPESA_SHORTCODE` / `MPESA_PASSKEY` | Paybill/till shortcode and STK passkey (required when live) |
 | `MPESA_CALLBACK_URL` | Public **https** URL for `/v1/payments/mpesa/callback` (required when live) |
@@ -94,7 +97,9 @@ Never commit `.env`. Rotate Daraja keys in your secret manager; one credential s
 
 ## Deploy
 
-The hosted app is a Vite static client plus an Express serverless function (`/v1`, `/health`). Neon holds Postgres. Upstash Redis holds sliding-window rate limits and a migrate lock. The Vercel project **sherehe** is already linked under team `kakaiteclimited-3896`. Session, ticket HMAC, Google OAuth, staff email, and `MPESA_MODE=mock` are already in the project env.
+The hosted app is a Vite static client plus an Express serverless function (`/v1`, `/health`). Neon holds Postgres. Upstash Redis holds sliding-window rate limits and a migrate lock. The Vercel project **sherehe** is already linked under team `kakaiteclimited-3896`. Session, ticket HMAC, Google OAuth, and staff email are already in the project env.
+
+Until live Daraja credentials are set, production must include `MPESA_ALLOW_MOCK=true` with `MPESA_MODE=mock` (boot refuses production mock otherwise). Remove `MPESA_ALLOW_MOCK` when you flip to live.
 
 To stage everything, commit, push `origin`, and deploy production in one step:
 
@@ -120,9 +125,26 @@ Production is **https://sherehe-seven.vercel.app**.
 
 4. In Google Cloud Console, add authorized JavaScript origin `https://sherehe-seven.vercel.app` (or the URL `vercel ls` shows) and redirect `https://<that-host>/v1/auth/google/callback`. SPA paths such as `/login` are rewritten to `index.html` in `vercel.json` so the Google handoff is not a Vercel 404.
 
-5. For live M-Pesa, set `MPESA_MODE=live` and `MPESA_CALLBACK_URL=https://<that-host>/v1/payments/mpesa/callback` plus Daraja credentials.
+5. For live M-Pesa, follow the [Go-live checklist](#go-live-checklist) below.
 
-Schema migrate/seed runs on the first serverless cold start (locked in Upstash). Each numbered SQL file is applied once (`schema_migrations`); mutating `001_init.sql` after a live database already exists is not enough — put additive changes in a new file. CI replays the pre-portal `001` schema against current files (`MIGRATE_REPLAY_DATABASE_URL`). A failed boot promise is not cached, so a migrate error cannot pin-kill the isolate. Local MySQL volumes are not used anymore; run `docker compose down` then `docker compose up -d postgres` after this change.
+Schema migrate/seed runs on the first serverless cold start (locked in Upstash; contention fails closed). Each numbered SQL file is applied once (`schema_migrations`); mutating `001_init.sql` after a live database already exists is not enough — put additive changes in a new file. CI replays the pre-portal `001` schema against current files (`MIGRATE_REPLAY_DATABASE_URL`) and runs HTTP integration tests (`INTEGRATION_DATABASE_URL`). A failed boot promise is not cached, so a migrate error cannot pin-kill the isolate. Local MySQL volumes are not used anymore; run `docker compose down` then `docker compose up -d postgres` after this change.
+
+### Go-live checklist
+
+1. Confirm Upstash Redis env (`UPSTASH_REDIS_REST_*` or `KV_REST_API_*`) is set on Vercel.
+2. Confirm Google OAuth origin + `/v1/auth/google/callback` for the production host.
+3. Set Daraja live (or sandbox) credentials: `MPESA_CONSUMER_KEY`, `MPESA_CONSUMER_SECRET`, `MPESA_SHORTCODE`, `MPESA_PASSKEY`, `MPESA_CALLBACK_URL=https://<host>/v1/payments/mpesa/callback`, `MPESA_ENV`.
+4. Set `MPESA_MODE=live` and **remove** `MPESA_ALLOW_MOCK`.
+5. Smoke one real STK Push (small amount), confirm callback + STK Query settle the order, download the PDF, and scan at Admin → Scan.
+6. Staff refund voids unused tickets in-app; reverse the M-Pesa money in the Daraja portal using the receipt when live.
+
+### Backups (Neon)
+
+Neon point-in-time restore / branching is the backup path for Postgres. Before ticket sales:
+
+1. Confirm the production Neon project's PITR window in the Neon console.
+2. Practice once: create a branch (or restore) to a scratch branch, point a preview `DATABASE_URL` at it, open `/health`, then discard the branch.
+3. Do not run one-off destructive SQL against production without a restore plan.
 
 ```mermaid
 flowchart TD
@@ -254,10 +276,11 @@ erDiagram
 ## Known limitations
 
 - USSD (`*199#`) is out of scope.
-- Refunds, email/SMS receipts, and a formal DPIA are not built.
+- Email/SMS push receipts are not built; guests download PDF stubs/receipts in-app. Staff can void unused tickets (Refund); live M-Pesa money reverse is done in Daraja with the receipt.
+- A formal DPIA is not filed; `/privacy` and `/terms` cover collection for this single event.
 - Load and mutation testing are deferred.
 - Compose runs Postgres only; the Node apps run on the host.
 - No user-facing appearance control (product requirement: follow system light/dark only; both palettes are the barbecue theme).
-- Password registration is not in the UI; staff access is the seeded email matching a Google account.
+- Password registration and login APIs return 410; sign-in is Google only. Staff access is the seeded `STAFF_EMAIL` matching a Google account.
 
 <sub>[↑ Back to contents](#contents)</sub>

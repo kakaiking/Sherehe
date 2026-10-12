@@ -3,7 +3,6 @@ import type { Request, Response, NextFunction } from "express";
 import type { Pool } from "../db.js";
 import type { Config } from "../config.js";
 import type { AccountKind } from "./accounts.js";
-import { ORDER_BUYER_EMAIL } from "./accounts.js";
 import {
   dbAccountKind,
   parseSessionKind,
@@ -21,7 +20,7 @@ export type SessionUser = {
   kind: AccountKind;
   email: string;
   phone: string | null;
-  role: "customer" | "staff" | "partner" | "vendor";
+  role: "customer" | "staff";
   display_name: string | null;
   given_name: string | null;
 };
@@ -184,20 +183,14 @@ export function loadUser(pool: Pool) {
       }
       const [rows] = await pool.query(
         `SELECT s.account_kind AS kind,
-                COALESCE(u.id, p.id, v.id) AS id,
-                ${ORDER_BUYER_EMAIL} AS email,
-                COALESCE(u.phone, p.phone, v.phone) AS phone,
-                CASE
-                  WHEN u.id IS NOT NULL THEN u.role
-                  WHEN p.id IS NOT NULL THEN 'partner'
-                  ELSE 'vendor'
-                END AS role,
-                COALESCE(u.display_name, p.display_name, v.display_name) AS display_name,
-                COALESCE(u.given_name, p.given_name, v.given_name) AS given_name
+                u.id AS id,
+                u.email AS email,
+                u.phone AS phone,
+                u.role AS role,
+                u.display_name AS display_name,
+                u.given_name AS given_name
          FROM sessions s
-         LEFT JOIN users u ON s.account_kind = 'user' AND u.id = s.user_id
-         LEFT JOIN partners p ON s.account_kind = 'partner' AND p.id = s.user_id
-         LEFT JOIN vendors v ON s.account_kind = 'vendor' AND v.id = s.user_id
+         INNER JOIN users u ON s.account_kind = 'user' AND u.id = s.user_id
          WHERE s.id = ? AND s.expires_at > NOW()`,
         [sid],
       );
@@ -233,32 +226,6 @@ export function requireStaff(req: Request, res: Response, next: NextFunction): v
       title: "Forbidden",
       status: 403,
       detail: "Staff access required.",
-    });
-    return;
-  }
-  next();
-}
-
-export function requireVendor(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user || req.user.role !== "vendor") {
-    res.status(403).json({
-      type: "https://httpstatuses.com/403",
-      title: "Forbidden",
-      status: 403,
-      detail: "Vendor portal access required.",
-    });
-    return;
-  }
-  next();
-}
-
-export function requirePartner(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user || req.user.role !== "partner") {
-    res.status(403).json({
-      type: "https://httpstatuses.com/403",
-      title: "Forbidden",
-      status: 403,
-      detail: "Partner portal access required.",
     });
     return;
   }

@@ -57,7 +57,7 @@ export function homeForPortal(portal: Portal): string {
 
 /** Sign-in screen may keep the Guest gate while OAuth returns. */
 export function isSignInPath(pathname: string): boolean {
-  return pathname === "/login" || pathname === "/register";
+  return pathname === "/login";
 }
 
 /**

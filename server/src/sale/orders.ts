@@ -1,9 +1,8 @@
 import { randomBytes, randomUUID } from "node:crypto";
-import type { Pool, PoolConnection, RowDataPacket, ResultHeader } from "../db.js";
+import type { Pool, PoolConnection, RowDataPacket } from "../db.js";
 import QRCode from "qrcode";
 import {
   assertCheckout,
-  assertPartnerCheckout,
   HOLD_MS,
   seatsFor,
   stubCountFor,
@@ -222,102 +221,6 @@ export async function createTicketOrder(
   }
 }
 
-/**
- * One-time free team tickets for a confirmed partner application.
- * Locks the application row, issues a paid KSh 0 order, and stamps ticket_order_id.
- */
-export async function createPartnerFreeTicketOrder(
-  pool: Pool,
-  partnerId: string,
-  code: TicketCode,
-  ticketSecret: string,
-): Promise<{ orderId: string; qty: number; totalKsh: 0 }> {
-  let orderId = "";
-  let qty = 0;
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    await conn.query(
-      "UPDATE orders SET status = 'expired' WHERE status = 'pending' AND hold_expires_at IS NOT NULL AND hold_expires_at <= NOW()",
-    );
-    const [apps] = await conn.query<RowDataPacket[]>(
-      `SELECT id, member_count, status, ticket_order_id
-       FROM partner_applications
-       WHERE partner_id = ? AND status = 'confirmed'
-       ORDER BY created_at DESC
-       LIMIT 1
-       FOR UPDATE`,
-      [partnerId],
-    );
-    const app = apps[0] as
-      | {
-          id: string;
-          member_count: number;
-          status: string;
-          ticket_order_id: string | null;
-        }
-      | undefined;
-    if (!app) {
-      throw Object.assign(new Error("partner_not_confirmed"), {
-        name: "PartnerTicketError",
-      });
-    }
-    if (app.ticket_order_id) {
-      throw Object.assign(new Error("partner_already_claimed"), {
-        name: "PartnerTicketError",
-      });
-    }
-    qty = Number(app.member_count);
-    const eventId = await loadEventId(conn);
-    const snap = await loadSnapshot(conn, eventId);
-    const now = new Date();
-    const checked = assertPartnerCheckout(now, snap, { code, qty });
-    if (!checked.ok) {
-      const err = new Error(checked.reason);
-      err.name = "CheckoutError";
-      throw err;
-    }
-    orderId = randomUUID();
-    await conn.query(
-      `INSERT INTO orders (id, account_kind, user_id, event_id, kind, status, total_ksh, hold_expires_at)
-       VALUES (?, 'partner', ?, ?, 'tickets', 'pending', 0, NULL)`,
-      [orderId, partnerId, eventId],
-    );
-    await conn.query(
-      `INSERT INTO order_items (id, order_id, sku_kind, sku_code, title, qty, unit_price_ksh, seats)
-       VALUES (?, ?, 'ticket', ?, ?, ?, 0, ?)`,
-      [
-        randomUUID(),
-        orderId,
-        code,
-        checked.offering.name,
-        qty,
-        seatsFor(checked.offering, qty),
-      ],
-    );
-    const [linkResult] = await conn.query<ResultHeader>(
-      `UPDATE partner_applications
-       SET ticket_order_id = ?
-       WHERE id = ? AND ticket_order_id IS NULL`,
-      [orderId, app.id],
-    );
-    if (linkResult.affectedRows !== 1) {
-      throw Object.assign(new Error("partner_already_claimed"), {
-        name: "PartnerTicketError",
-      });
-    }
-    await conn.commit();
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
-  }
-
-  await fulfillPaidOrder(pool, orderId, ticketSecret);
-  return { orderId, qty, totalKsh: 0 };
-}
-
 export async function fulfillPaidOrder(
   pool: Pool,
   orderId: string,
@@ -407,6 +310,92 @@ export async function markTicketStubDownloaded(
      WHERE id = ? AND kind = 'tickets' AND status = 'paid'`,
     [orderId],
   );
+}
+
+/**
+ * Staff refund: void unused tickets and mark order/payment refunded.
+ * Rejects if any ticket was already scanned (used).
+ * Money reverse via Daraja is left to ops when live (logged with receipt).
+ */
+export async function refundPaidTicketOrder(
+  pool: Pool,
+  orderId: string,
+): Promise<{
+  receipt: string | null;
+  totalKsh: number;
+  ticketsVoided: number;
+}> {
+  const conn = await pool.getConnection();
+  try {
+    await conn.beginTransaction();
+    const [orderRows] = await conn.query<RowDataPacket[]>(
+      "SELECT id, kind, status, total_ksh FROM orders WHERE id = ? FOR UPDATE",
+      [orderId],
+    );
+    const order = orderRows[0] as
+      | { id: string; kind: string; status: string; total_ksh: number }
+      | undefined;
+    if (!order || order.kind !== "tickets") {
+      throw Object.assign(new Error("order_not_found"), { name: "RefundError" });
+    }
+    if (order.status === "refunded") {
+      throw Object.assign(new Error("already_refunded"), { name: "RefundError" });
+    }
+    if (order.status !== "paid") {
+      throw Object.assign(new Error("order_not_paid"), { name: "RefundError" });
+    }
+    const [ticketRows] = await conn.query<RowDataPacket[]>(
+      "SELECT id, status FROM tickets WHERE order_id = ? FOR UPDATE",
+      [orderId],
+    );
+    const tickets = ticketRows as Array<{ id: string; status: string }>;
+    if (tickets.some((t) => t.status === "used")) {
+      throw Object.assign(new Error("ticket_already_used"), {
+        name: "RefundError",
+      });
+    }
+    const [payRows] = await conn.query<RowDataPacket[]>(
+      `SELECT id, receipt FROM payments
+       WHERE order_id = ? AND status = 'succeeded'
+       ORDER BY created_at DESC LIMIT 1
+       FOR UPDATE`,
+      [orderId],
+    );
+    const pay = payRows[0] as { id: string; receipt: string | null } | undefined;
+    let voided = 0;
+    for (const t of tickets) {
+      if (t.status === "issued" || t.status === "void") {
+        if (t.status === "issued") {
+          await conn.query(
+            "UPDATE tickets SET status = 'void' WHERE id = ? AND status = 'issued'",
+            [t.id],
+          );
+          voided += 1;
+        }
+      }
+    }
+    await conn.query(
+      "UPDATE orders SET status = 'refunded' WHERE id = ? AND status = 'paid'",
+      [orderId],
+    );
+    if (pay) {
+      await conn.query(
+        "UPDATE payments SET status = 'refunded' WHERE id = ? AND status = 'succeeded'",
+        [pay.id],
+      );
+    }
+    await conn.commit();
+    return {
+      receipt: pay?.receipt ?? null,
+      totalKsh: Number(order.total_ksh),
+      ticketsVoided: voided,
+    };
+  } catch (err) {
+    await conn.rollback();
+    throw err;
+  } finally {
+    conn.release();
+  }
 }
 
 /** True when this buyer already downloaded a paid ticket stub. */

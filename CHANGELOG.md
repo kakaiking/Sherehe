@@ -4,8 +4,16 @@ All notable changes to Sherehe are documented in this file.
 
 ## Unreleased
 
+### Added
+
+- Production readiness: live M-Pesa callbacks re-confirm via STK Query; production mock STK requires `MPESA_ALLOW_MOCK=true`; staff **Refund** voids unused tickets (`006_order_refunded.sql`); `/privacy` and `/terms`; readiness `/health` (DB + Redis); broader rate limits; CI `npm audit` + gitleaks; HTTP integration tests.
+- Go-live checklist and Neon restore notes in the README.
+
 ### Changed
 
+- Password `POST /v1/auth/register` and `/login` return 410 (Google only). `/register` redirects to `/login`.
+- Dead commerce/partner/vendor route modules and partner free-ticket claim removed from the live API; sessions load users only.
+- Migrate lock fails closed after contention instead of running unlocked.
 - Admin **Attendees** desk pages buyers **10 at a time** (prev/next + range label), matching scan history.
 - Admin desk headers show only the title (no live clock or subtitle lede under Dashboard / Attendees / Tickets / Partners / Gate scan).
 - Admin dashboard **Scan** card is icon above **Scan** only (no Gate label or “Check in tickets”).

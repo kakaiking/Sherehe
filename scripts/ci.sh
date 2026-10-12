@@ -5,6 +5,7 @@ npm ci
 npm run typecheck
 npm run lint
 npm test
+npm run audit
 if command -v bats >/dev/null 2>&1; then
   bats scripts/test/start-common.bats
 fi
