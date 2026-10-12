@@ -5,6 +5,7 @@ import {
   parsePaystackVerify,
   paystackSignatureOk,
   paystackStkClient,
+  recoverPaystackCharge,
 } from "./paystack.js";
 
 describe("paystack parsers", () => {
@@ -13,8 +14,17 @@ describe("paystack parsers", () => {
       parsePaystackCharge({
         status: true,
         data: { reference: "shabc", status: "pay_offline", id: 9 },
-      }),
+      }, "shabc"),
     ).toEqual({ checkoutRequestId: "shabc", merchantRequestId: "9" });
+  });
+
+  it("keeps the reference we sent when Paystack omits data.reference", () => {
+    expect(
+      parsePaystackCharge(
+        { status: true, message: "Charge attempted", data: { status: "pay_offline" } },
+        "shsentref",
+      ),
+    ).toEqual({ checkoutRequestId: "shsentref", merchantRequestId: "shsentref" });
   });
 
   it("rejects a failed charge", () => {
@@ -22,8 +32,34 @@ describe("paystack parsers", () => {
       parsePaystackCharge({
         status: true,
         data: { reference: "shabc", status: "failed" },
-      }),
+      }, "shabc"),
     ).toThrow(/paystack_charge_failed/);
+  });
+
+  it("accepts an STK prompt even when the top-level status flag is false", () => {
+    expect(
+      parsePaystackCharge(
+        {
+          status: false,
+          message: "Charge attempted",
+          data: { status: "pay_offline", display_text: "Please complete authorization process on your mobile phone" },
+        },
+        "shsentref",
+      ),
+    ).toEqual({ checkoutRequestId: "shsentref", merchantRequestId: "shsentref" });
+  });
+
+  it("reports the gateway reason instead of the generic Charge attempted line", () => {
+    expect(() =>
+      parsePaystackCharge(
+        {
+          status: true,
+          message: "Charge attempted",
+          data: { reference: "shabc", status: "failed", gateway_response: "Insufficient funds" },
+        },
+        "shabc",
+      ),
+    ).toThrow("paystack_charge_failed:Insufficient funds");
   });
 
   it("maps a matching KES success to paid and a short receipt", () => {
@@ -116,5 +152,47 @@ describe("paystackStkClient", () => {
     expect(body.currency).toBe("KES");
     expect(body.mobile_money).toEqual({ phone: "+254707775994", provider: "mpesa" });
     vi.unstubAllGlobals();
+  });
+
+  it("keeps the order when charge says failed but verify still shows the prompt", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (String(url).includes("/transaction/verify/")) {
+        return {
+          json: async () => ({
+            status: true,
+            data: { reference: "shkept", status: "pay_offline" },
+          }),
+        };
+      }
+      return {
+        json: async () => ({
+          status: true,
+          message: "Charge attempted",
+          data: { reference: "shkept", status: "failed" },
+        }),
+      };
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const stk = paystackStkClient({ secretKey: "sk_test_abc" }, async () => 1000);
+    await expect(
+      stk.push({
+        phone: "254704551241",
+        amountKsh: 10,
+        accountRef: "abc",
+        email: "guest@example.com",
+      }),
+    ).resolves.toMatchObject({ checkoutRequestId: "shkept" });
+    vi.unstubAllGlobals();
+  });
+});
+
+describe("recoverPaystackCharge", () => {
+  it("recovers a pending verify payload", () => {
+    expect(
+      recoverPaystackCharge(
+        { status: true, data: { reference: "shabc", status: "pending" } },
+        "shabc",
+      ),
+    ).toEqual({ checkoutRequestId: "shabc", merchantRequestId: "shabc" });
   });
 });

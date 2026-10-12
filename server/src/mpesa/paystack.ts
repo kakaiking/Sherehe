@@ -39,22 +39,84 @@ export function paystackPhone(msisdn: string): string {
   return digits.startsWith("254") ? `+${digits}` : `+254${digits}`;
 }
 
-/** Charge accepted and the phone should show an STK prompt (`pay_offline`). */
-export function parsePaystackCharge(json: unknown): StkPushResult {
-  const root = asRecord(json);
-  const data = asRecord(root?.["data"]);
-  const ok = root?.["status"] === true;
-  const reference = typeof data?.["reference"] === "string" ? data["reference"] : "";
-  const status = typeof data?.["status"] === "string" ? data["status"] : "";
-  if (!ok || !reference || status === "failed") {
-    const message = typeof root?.["message"] === "string" ? root["message"] : "";
-    const safe = message.replace(/[^\w .'-]/g, "").slice(0, 80);
-    throw new Error(safe ? `paystack_charge_failed:${safe}` : "paystack_charge_failed");
-  }
+const PROMPT_STATUSES = new Set([
+  "pay_offline",
+  "pending",
+  "ongoing",
+  "processing",
+  "queued",
+  "open_url",
+  "send_otp",
+  "send_pin",
+  "send_phone",
+]);
+
+function safeProviderText(value: unknown): string {
+  if (typeof value !== "string") return "";
+  return value.replace(/[^\w .'-]/g, "").trim().slice(0, 80);
+}
+
+function chargeReference(data: Record<string, unknown> | undefined, sentReference: string): string {
+  const echoed = typeof data?.["reference"] === "string" ? data["reference"] : "";
+  return (echoed || sentReference).slice(0, 64);
+}
+
+function chargeResult(
+  data: Record<string, unknown> | undefined,
+  reference: string,
+): StkPushResult {
   const id = data?.["id"];
   const merchant =
     typeof id === "number" || typeof id === "string" ? String(id).slice(0, 64) : reference;
-  return { checkoutRequestId: reference.slice(0, 64), merchantRequestId: merchant };
+  return { checkoutRequestId: reference, merchantRequestId: merchant };
+}
+
+function chargeFailure(root: Record<string, unknown> | undefined, data: Record<string, unknown> | undefined): Error {
+  const specific = [
+    safeProviderText(data?.["gateway_response"]),
+    safeProviderText(data?.["message"]),
+    safeProviderText(root?.["message"]),
+  ].find((text) => text && text.toLowerCase() !== "charge attempted");
+  return new Error(specific ? `paystack_charge_failed:${specific}` : "paystack_charge_failed");
+}
+
+/**
+ * Charge accepted and the phone should show an STK prompt (`pay_offline`).
+ * Paystack's success message is "Charge attempted" on both accepted and declined
+ * charges, so that text is not a failure. A prompt status is enough even when
+ * the top-level `status` flag is false. Some M-Pesa responses omit
+ * `data.reference`; the reference we sent on the request is then the id to poll.
+ */
+export function parsePaystackCharge(json: unknown, sentReference: string): StkPushResult {
+  const root = asRecord(json);
+  const data = asRecord(root?.["data"]);
+  const reference = chargeReference(data, sentReference);
+  const status = typeof data?.["status"] === "string" ? data["status"] : "";
+  if (reference && (PROMPT_STATUSES.has(status) || status === "success")) {
+    return chargeResult(data, reference);
+  }
+  const ok = root?.["status"] === true;
+  if (ok && reference && status !== "failed" && status !== "abandoned" && status !== "reversed") {
+    return chargeResult(data, reference);
+  }
+  throw chargeFailure(root, data);
+}
+
+/**
+ * Charge said the attempt failed, but verify can still show the STK is in flight.
+ * Returns the checkout ids when the transaction is waiting or already paid.
+ */
+export function recoverPaystackCharge(json: unknown, sentReference: string): StkPushResult | null {
+  const root = asRecord(json);
+  const data = asRecord(root?.["data"]);
+  if (root?.["status"] !== true || !data) return null;
+  const status = typeof data["status"] === "string" ? data["status"] : "";
+  const reference = chargeReference(data, sentReference);
+  if (!reference) return null;
+  if (status === "success" || PROMPT_STATUSES.has(status)) {
+    return chargeResult(data, reference);
+  }
+  return null;
 }
 
 function receiptFromVerify(data: Record<string, unknown>, reference: string): string {
@@ -150,7 +212,20 @@ export function paystackStkClient(
           mobile_money: { phone: paystackPhone(input.phone), provider: "mpesa" },
         }),
       });
-      return parsePaystackCharge(json);
+      try {
+        return parsePaystackCharge(json, reference);
+      } catch (err) {
+        const verified = await authed(
+          `https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`,
+          { method: "GET" },
+        );
+        const recovered = recoverPaystackCharge(verified, reference);
+        if (recovered) return recovered;
+        const verifyData = asRecord(asRecord(verified)?.["data"]);
+        const clearer = chargeFailure(asRecord(verified), verifyData);
+        if (clearer.message !== "paystack_charge_failed") throw clearer;
+        throw err;
+      }
     },
     async query(checkoutRequestId: string): Promise<StkQueryParsed> {
       const expected = await expectedSubunitsFor(checkoutRequestId);
