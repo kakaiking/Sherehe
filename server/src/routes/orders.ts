@@ -36,6 +36,14 @@ const TicketOrderBody = z.object({
   qty: z.number().int().min(1).max(20),
 });
 
+function stkFailureDetail(err: unknown): string {
+  const message = err instanceof Error ? err.message : "";
+  const marker = "paystack_charge_failed:";
+  const tail = message.startsWith(marker) ? message.slice(marker.length).trim() : "";
+  if (tail) return tail;
+  return "M-Pesa did not accept the payment request. Try again.";
+}
+
 const checkoutErrors: Record<string, { status: number; detail: string }> = {
   not_on_sale: { status: 409, detail: "That ticket is not on sale right now." },
   sold_out: { status: 409, detail: "That ticket is sold out." },
@@ -226,7 +234,7 @@ export function ordersRouter(
           type: "https://httpstatuses.com/502",
           title: "Bad Gateway",
           status: 502,
-          detail: "M-Pesa did not accept the payment request. Try again.",
+          detail: stkFailureDetail(err),
         });
         return;
       }

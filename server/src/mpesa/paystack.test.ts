@@ -130,7 +130,7 @@ describe("paystackStkClient", () => {
     }));
     vi.stubGlobal("fetch", fetchMock);
     const stk = paystackStkClient(
-      { secretKey: "sk_test_abc" },
+      { secretKey: "sk_live_abc" },
       async () => 20000,
     );
     await stk.push({
@@ -151,6 +151,29 @@ describe("paystackStkClient", () => {
     expect(body.email).toBe("guest@example.com");
     expect(body.currency).toBe("KES");
     expect(body.mobile_money).toEqual({ phone: "+254707775994", provider: "mpesa" });
+    vi.unstubAllGlobals();
+  });
+
+  it("charges Paystack's Kenya test number when the secret is a test key", async () => {
+    const fetchMock = vi.fn(async () => ({
+      json: async () => ({
+        status: true,
+        data: { reference: "shtest", status: "success", id: 2 },
+      }),
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+    const stk = paystackStkClient({ secretKey: "sk_test_abc" }, async () => 1000);
+    await stk.push({
+      phone: "254704551241",
+      amountKsh: 10,
+      accountRef: "abc",
+      email: "guest@example.com",
+    });
+    const calls = fetchMock.mock.calls as unknown as Array<[string, RequestInit]>;
+    const body = JSON.parse(String(calls[0]?.[1]?.body)) as {
+      mobile_money: { phone: string };
+    };
+    expect(body.mobile_money.phone).toBe("+254710000000");
     vi.unstubAllGlobals();
   });
 

@@ -33,10 +33,19 @@ function asRecord(json: unknown): Record<string, unknown> | undefined {
   return json as Record<string, unknown>;
 }
 
+/** Paystack test mode rejects every real Safaricom number. */
+export const PAYSTACK_TEST_MPESA = "254710000000";
+
 /** Paystack Kenya STK expects a leading plus on the MSISDN. */
 export function paystackPhone(msisdn: string): string {
   const digits = msisdn.replace(/\D/g, "");
   return digits.startsWith("254") ? `+${digits}` : `+254${digits}`;
+}
+
+/** Live keys charge the guest. Test keys must use Paystack's Kenya test number. */
+export function paystackChargePhone(phone: string, secretKey: string): string {
+  if (secretKey.startsWith("sk_test_")) return paystackPhone(PAYSTACK_TEST_MPESA);
+  return paystackPhone(phone);
 }
 
 const PROMPT_STATUSES = new Set([
@@ -209,7 +218,7 @@ export function paystackStkClient(
           currency: "KES",
           reference,
           metadata: { account_ref: input.accountRef.slice(0, 12) },
-          mobile_money: { phone: paystackPhone(input.phone), provider: "mpesa" },
+          mobile_money: { phone: paystackChargePhone(input.phone, creds.secretKey), provider: "mpesa" },
         }),
       });
       try {
