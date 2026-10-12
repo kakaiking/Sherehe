@@ -6,7 +6,7 @@ All notable changes to Sherehe are documented in this file.
 
 ### Added
 
-- **Test Ticket** at KSh 5 (code `test`, 10 seats, on sale now) for a live Paystack prompt. Inventory pool is 310.
+- **Test Ticket** at KSh 10 (code `test`, 10 seats, on sale now) for a live Paystack prompt. Paystack refuses M-Pesa charges under KSh 10. Inventory pool is 310. The charge phone is sent as `+254…`.
 
 ### Added
 

@@ -214,7 +214,10 @@ export function ordersRouter(
           accountRef: created.orderId.replace(/-/g, "").slice(0, 12),
           email: user.email,
         });
-      } catch {
+      } catch (err) {
+        log("warn", "stk_push_failed", {
+          reason: err instanceof Error ? err.message.slice(0, 120) : "unknown",
+        });
         await pool.query(
           "UPDATE orders SET status = 'cancelled', hold_expires_at = NULL WHERE id = ?",
           [created.orderId],

@@ -114,7 +114,7 @@ describe("paystackStkClient", () => {
     expect(body.amount).toBe(20000);
     expect(body.email).toBe("guest@example.com");
     expect(body.currency).toBe("KES");
-    expect(body.mobile_money).toEqual({ phone: "254707775994", provider: "mpesa" });
+    expect(body.mobile_money).toEqual({ phone: "+254707775994", provider: "mpesa" });
     vi.unstubAllGlobals();
   });
 });

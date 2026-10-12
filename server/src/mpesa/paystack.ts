@@ -33,6 +33,12 @@ function asRecord(json: unknown): Record<string, unknown> | undefined {
   return json as Record<string, unknown>;
 }
 
+/** Paystack Kenya STK expects a leading plus on the MSISDN. */
+export function paystackPhone(msisdn: string): string {
+  const digits = msisdn.replace(/\D/g, "");
+  return digits.startsWith("254") ? `+${digits}` : `+254${digits}`;
+}
+
 /** Charge accepted and the phone should show an STK prompt (`pay_offline`). */
 export function parsePaystackCharge(json: unknown): StkPushResult {
   const root = asRecord(json);
@@ -41,7 +47,9 @@ export function parsePaystackCharge(json: unknown): StkPushResult {
   const reference = typeof data?.["reference"] === "string" ? data["reference"] : "";
   const status = typeof data?.["status"] === "string" ? data["status"] : "";
   if (!ok || !reference || status === "failed") {
-    throw new Error("paystack_charge_failed");
+    const message = typeof root?.["message"] === "string" ? root["message"] : "";
+    const safe = message.replace(/[^\w .'-]/g, "").slice(0, 80);
+    throw new Error(safe ? `paystack_charge_failed:${safe}` : "paystack_charge_failed");
   }
   const id = data?.["id"];
   const merchant =
@@ -139,7 +147,7 @@ export function paystackStkClient(
           currency: "KES",
           reference,
           metadata: { account_ref: input.accountRef.slice(0, 12) },
-          mobile_money: { phone: input.phone, provider: "mpesa" },
+          mobile_money: { phone: paystackPhone(input.phone), provider: "mpesa" },
         }),
       });
       return parsePaystackCharge(json);
