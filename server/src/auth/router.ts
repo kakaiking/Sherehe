@@ -33,8 +33,6 @@ import {
   type AccountKind,
   type AccountTable,
 } from "./accounts.js";
-import { isStaffEmail } from "./staffEmail.js";
-
 const PhoneBody = z.object({
   phone: z.string().min(9).max(20),
 });
@@ -192,20 +190,19 @@ export function authRouter(pool: Pool, config: Config): Router {
         parsed.data.verifier,
       );
       const claims = await verifyGoogleIdToken(idToken, oauth.clientId, fetch);
-      const adminEmail = isStaffEmail(claims.email, config.STAFF_EMAIL);
-      if (sessionKind === "admin" && !adminEmail) {
-        fail("google_portal");
-        return;
-      }
+      const portalRole: UserRole =
+        sessionKind === "admin" ? "staff" : intendedRole;
       const userRoleForInsert: UserRole =
-        table === "users" && adminEmail ? "staff" : intendedRole;
+        table === "users" ? portalRole : intendedRole;
+      const roleClause = table === "users" ? " AND role = ?" : "";
+      const roleParams = table === "users" ? [portalRole] : [];
       const [subRows] = await pool.query<RowDataPacket[]>(
-        `${profileSelect(table)} WHERE google_sub = ?`,
-        [claims.sub],
+        `${profileSelect(table)} WHERE google_sub = ?${roleClause}`,
+        [claims.sub, ...roleParams],
       );
       const [emailRows] = await pool.query<RowDataPacket[]>(
-        `${profileSelect(table)} WHERE email = ?`,
-        [claims.email],
+        `${profileSelect(table)} WHERE email = ?${roleClause}`,
+        [claims.email, ...roleParams],
       );
       const bySub = subRows[0] as GoogleUserRow | undefined;
       const byEmail = emailRows[0] as GoogleUserRow | undefined;
@@ -272,15 +269,7 @@ export function authRouter(pool: Pool, config: Config): Router {
           given_name: claims.givenName,
         };
       }
-      if (table === "users" && adminEmail && user.role !== "staff") {
-        await pool.query("UPDATE users SET role = 'staff' WHERE id = ?", [user.id]);
-        user = { ...user, role: "staff" };
-      }
       user = { ...user, role: sessionRole(table, user, accountKind) };
-      if (sessionKind === "admin" && user.role !== "staff") {
-        fail("google_portal");
-        return;
-      }
       await createSession(pool, res, config, user.id, sessionKind, req);
       res.json(publicUser({
         id: user.id,

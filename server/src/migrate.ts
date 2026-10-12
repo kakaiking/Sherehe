@@ -131,37 +131,29 @@ export async function migrateAndSeed(): Promise<void> {
   }
 }
 
-/** Keep exactly STAFF_EMAIL as staff; demote any other staff rows. */
+/**
+ * Seed a staff row for STAFF_EMAIL when one does not exist.
+ * Never rewrite a guest row: the same email may already be a customer id.
+ */
 async function syncStaffEmail(pool: Pool, config: ReturnType<typeof loadConfig>): Promise<void> {
   if (!config.STAFF_EMAIL) return;
   const email = config.STAFF_EMAIL.toLowerCase();
-  await pool.query(
-    "UPDATE users SET role = 'customer' WHERE role = 'staff' AND email <> ?",
+  const [rows] = await pool.query(
+    "SELECT id FROM users WHERE email = ? AND role = 'staff'",
     [email],
   );
-  const [rows] = await pool.query("SELECT id FROM users WHERE email = ?", [email]);
   if ((rows as Array<{ id: string }>).length > 0) {
-    await pool.query("UPDATE users SET role = 'staff' WHERE email = ?", [email]);
     return;
-  }
-  if (config.STAFF_PHONE) {
-    const [byPhone] = await pool.query("SELECT id FROM users WHERE phone = ?", [
-      config.STAFF_PHONE,
-    ]);
-    const phoneRow = (byPhone as Array<{ id: string }>)[0];
-    if (phoneRow) {
-      await pool.query("UPDATE users SET email = ?, role = 'staff' WHERE id = ?", [
-        email,
-        phoneRow.id,
-      ]);
-      return;
-    }
   }
   if (config.STAFF_PASSWORD && config.STAFF_PHONE) {
     const hash = await hashPassword(config.STAFF_PASSWORD);
+    const [byPhone] = await pool.query("SELECT id FROM users WHERE phone = ?", [
+      config.STAFF_PHONE,
+    ]);
+    const phoneTaken = (byPhone as Array<{ id: string }>).length > 0;
     await pool.query(
       "INSERT INTO users (id, email, phone, password_hash, role) VALUES (?, ?, ?, ?, 'staff')",
-      [randomUUID(), email, config.STAFF_PHONE, hash],
+      [randomUUID(), email, phoneTaken ? null : config.STAFF_PHONE, hash],
     );
   }
 }

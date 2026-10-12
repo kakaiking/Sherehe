@@ -163,7 +163,7 @@ export function AuthPage({
   mode = "portals",
 }: {
   onAuth: (user: User) => void;
-  /** Admin gate: single centered Admin chip; only STAFF_EMAIL may enter. */
+  /** Admin gate: single centered Admin chip. Same email may also be a guest; ids differ. */
   mode?: "portals" | "admin";
 }): ReactElement {
   const [error, setError] = useState<string | null>(null);

@@ -22,7 +22,7 @@ Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at
 
 Guests buy phased event tickets (Early Bird through VIIP, group of five, optional flash sale under 200 attendees) for the night at Fused Lens Studios. The header, home poster, ticket flow, and PDF stubs show that date and studio. Payments go through M-Pesa STK Push (mock mode locally).
 
-The public UI is a mobile-first barbecue pit: charcoal, flame, and sauce-pink. Two portals: **Guest** (`/guest` — Home / Tickets / You) and **Admin** (`/admin` — Dashboard / Tickets / Scan). Sign-in is shared `/login` for guests; admin Google starts from `/admin`. Google creates or reuses a `users` row and sets an httpOnly session cookie (`sherehe_sid_user` or `sherehe_sid_admin`). Signing into one gate does not clear the other; sign-out clears only the active gate. Staff live in the `users` table (`role = staff`); only `STAFF_EMAIL` may open the admin gate. Light and dark palettes follow the operating system. There is no theme toggle.
+The public UI is a mobile-first barbecue pit: charcoal, flame, and sauce-pink. Two portals: **Guest** (`/guest` — Home / Tickets / You) and **Admin** (`/admin` — Dashboard / Tickets / Scan). Sign-in is shared `/login` for guests; admin Google starts from `/admin`. Google creates or reuses a `users` row and sets an httpOnly session cookie (`sherehe_sid_user` or `sherehe_sid_admin`). Signing into one gate does not clear the other; sign-out clears only the active gate. Staff live in the `users` table (`role = staff`) as their own row. The same email may also be a guest (`role = customer`); the account id is what is unique per portal. Light and dark palettes follow the operating system. There is no theme toggle.
 
 **Tickets** are four steps: pick, quantity, pay with M-Pesa, then download a charcoal pit PDF stub. The paid row lands in **Records** on You. Signing in from the Sign in screen with nothing saved lands on `/guest`. Google stores the display name (shown on **You** above email and phone, and on stub lines). A Kenyan mobile is entered on **Receive Prompt** (country code **+254** plus nine spaced digits), not after Google. Sign out opens **Sign in**, not a signed-out holding page.
 
@@ -41,7 +41,7 @@ npm install
 npm run migrate -w server
 ```
 
-Staff bootstrap uses `STAFF_EMAIL`, `STAFF_PASSWORD`, and `STAFF_PHONE` from `.env` on first seed. Public sign-in is Google only — set `STAFF_EMAIL` to that Google account so the admin portal is available after **Continue with Google** on `/admin`. Admin is reached only by opening `/admin` directly (no Admin shortcut from Guest You or other portals). Staff still need an admin session cookie for ops APIs. Only that email is promoted to staff.
+Staff bootstrap uses `STAFF_EMAIL`, `STAFF_PASSWORD`, and `STAFF_PHONE` from `.env` on first seed. Public sign-in is Google only. **Continue with Google** on `/admin` creates or reuses a staff row for that Google account, even when the same email already has a guest row. Admin is reached only by opening `/admin` directly (no Admin shortcut from Guest You or other portals). Staff still need an admin session cookie for ops APIs. `STAFF_EMAIL` only seeds a staff row on migrate; it does not lock the gate to one address.
 
 ## Usage
 
@@ -283,6 +283,6 @@ erDiagram
 - Load and mutation testing are deferred.
 - Compose runs Postgres only; the Node apps run on the host.
 - No user-facing appearance control (product requirement: follow system light/dark only; both palettes are the barbecue theme).
-- Password registration and login APIs return 410; sign-in is Google only. Staff access is the seeded `STAFF_EMAIL` matching a Google account.
+- Password registration and login APIs return 410; sign-in is Google only. Guest and admin are separate account ids, so one Google email can sign in on both gates.
 
 <sub>[↑ Back to contents](#contents)</sub>
