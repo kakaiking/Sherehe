@@ -72,13 +72,13 @@ describe("migration files stay upgrade-safe", () => {
     expect(src).toMatch(/SEED_EVENT_PARTNERS/);
     expect(src).toMatch(/DELETE FROM event_partners/);
     const names = [
+      "Hackstreet Boys",
+      "Food With Walter",
       "OMPO",
       "Van Hygiene",
       "Chef With",
       "Motif The Chef",
       "Kihumo",
-      "Food With Walter",
-      "Hackstreet Boys",
       "Ankara Artifacts",
     ];
     for (const name of names) {

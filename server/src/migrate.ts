@@ -219,6 +219,18 @@ const SEED_EVENT_PARTNERS: Array<{
   file: string;
 }> = [
   {
+    name: "Hackstreet Boys",
+    description:
+      "Hackstreet Boys are the technology behind the night. They built the website you are on and the ticket scanning at the gate, so the lineup, the passes, and the door all run on one system.",
+    file: "hck-strt.jpg",
+  },
+  {
+    name: "Food With Walter",
+    description:
+      "Food With Walter is the house kitchen presenting the night. The pan and the flame are the host mark: the menu, the service, and the room all sit under their name.",
+    file: "food-with-walter.jpg",
+  },
+  {
     name: "OMPO",
     description:
       "OMPO is the cocktail supplier for the night. They keep the bar stocked and the glasses moving, and the mark says it plainly: it’s yours for the taking.",
@@ -247,18 +259,6 @@ const SEED_EVENT_PARTNERS: Array<{
     description:
       "Kihumo pours muratina. The bottle in the tree is the whole idea: our heritage in every sip, served as part of the night rather than as a souvenir.",
     file: "kihumo.jpg",
-  },
-  {
-    name: "Food With Walter",
-    description:
-      "Food With Walter is the house kitchen presenting the night. The pan and the flame are the host mark: the menu, the service, and the room all sit under their name.",
-    file: "food-with-walter.jpg",
-  },
-  {
-    name: "Hackstreet Boys",
-    description:
-      "Hackstreet Boys are the technology behind the night. They built the website you are on and the ticket scanning at the gate, so the lineup, the passes, and the door all run on one system.",
-    file: "hck-strt.jpg",
   },
   {
     name: "Ankara Artifacts",
