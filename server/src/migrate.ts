@@ -209,6 +209,7 @@ const RETIRED_EVENT_PARTNER_NAMES = [
   "Sukuma Secure",
   "Matatu Media",
   "Walter’s Pantry",
+  "CW",
 ];
 
 const SEED_EVENT_PARTNERS: Array<{
@@ -218,32 +219,32 @@ const SEED_EVENT_PARTNERS: Array<{
 }> = [
   {
     name: "OMPO",
-    description: "It’s yours for the taking.",
+    description: "Cocktail supplier. It’s yours for the taking.",
     file: "ompo.jpg",
   },
   {
     name: "Van Hygiene",
-    description: "Mobile hygiene for the night.",
+    description: "Cleaning company for the night.",
     file: "van-hygiene.jpg",
   },
   {
-    name: "CW",
-    description: "CW.",
+    name: "Chef With",
+    description: "Chef With, on the line with the house kitchen.",
     file: "cw.jpg",
   },
   {
     name: "Motif The Chef",
-    description: "Established 2017.",
+    description: "Grill master. Established 2017.",
     file: "motif-the-chef.jpg",
   },
   {
     name: "Kihumo",
-    description: "Our heritage in every sip.",
+    description: "Muratina. Our heritage in every sip.",
     file: "kihumo.jpg",
   },
   {
     name: "Food With Walter",
-    description: "Food with Walter.",
+    description: "The house kitchen presenting the night.",
     file: "food-with-walter.jpg",
   },
   {
@@ -253,7 +254,7 @@ const SEED_EVENT_PARTNERS: Array<{
   },
   {
     name: "Ankara Artifacts",
-    description: "Ankara Artifacts.",
+    description: "Decor partner for the room.",
     file: "ankara-artifacts.png",
   },
 ];

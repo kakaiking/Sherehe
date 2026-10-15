@@ -74,7 +74,7 @@ describe("migration files stay upgrade-safe", () => {
     const names = [
       "OMPO",
       "Van Hygiene",
-      "CW",
+      "Chef With",
       "Motif The Chef",
       "Kihumo",
       "Food With Walter",
