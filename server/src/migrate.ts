@@ -122,6 +122,7 @@ export async function migrateAndSeed(): Promise<void> {
     await pool.query("UPDATE ticket_types SET capacity = 20 WHERE code = 'vip'");
     await pool.query("UPDATE ticket_types SET capacity = 10 WHERE code = 'group'");
     await pool.query("UPDATE ticket_types SET capacity = 50, price_ksh = 2800 WHERE code = 'flash'");
+    await pool.query("UPDATE sale_windows SET ends_at = NULL WHERE ticket_code = 'early_bird'");
     await syncStaffEmail(pool, config);
     log("info", "migrate_ok", {});
   } finally {
@@ -338,15 +339,14 @@ async function seed(
   }
   const now = new Date();
   const open = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-  const earlyEnd = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
   await pool.query(
     `INSERT INTO sale_windows (id, event_id, ticket_code, starts_at, ends_at) VALUES
-     (?, ?, 'early_bird', ?, ?),
+     (?, ?, 'early_bird', ?, NULL),
      (?, ?, 'regular', ?, NULL),
      (?, ?, 'vip', ?, NULL),
      (?, ?, 'group', ?, NULL)`,
     [
-      randomUUID(), eventId, open, earlyEnd,
+      randomUUID(), eventId, open,
       randomUUID(), eventId, open,
       randomUUID(), eventId, open,
       randomUUID(), eventId, open,

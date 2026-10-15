@@ -8,7 +8,7 @@ All notable changes to Sherehe are documented in this file.
 
 - Ticket checkout sends the M-Pesa prompt to the number typed on the pay step. That number is not saved on the Google account, so the same mobile can be used from more than one email.
 - **Test Ticket** (KSh 10) and **VIIP** are no longer on sale. Inventory pool is 280. Already issued stubs for those codes still scan.
-- Early Bird stays KSh 2,000. Flash Sale is KSh 2,800.
+- Early Bird is on sale again at KSh 2,000 (its previous window had ended, so guests never saw it). Flash Sale is KSh 2,800 on the admin ticket list and at checkout when a flash day is armed.
 
 ### Added
 
