@@ -197,104 +197,102 @@ async function ensureFoodMeals(pool: Pool): Promise<void> {
   }
 }
 
-/** 1×1 PNG — valid logo bytes for seed rows (JPEG/PNG/WebP allowed). */
-const SEED_PARTNER_LOGO_PNG = Buffer.from(
-  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-  "base64",
-);
+/** Demo names from the first showcase seed. Removed when real partners are applied. */
+const RETIRED_EVENT_PARTNER_NAMES = [
+  "Savanna Brew Co",
+  "Coal & Citrus",
+  "Nairobi Sound Desk",
+  "Plate Run Logistics",
+  "Kachumbari Farms",
+  "Ember Print House",
+  "Gate Light Co",
+  "Sukuma Secure",
+  "Matatu Media",
+  "Walter’s Pantry",
+];
 
 const SEED_EVENT_PARTNERS: Array<{
   name: string;
   description: string;
-  phone: string;
-  email: string;
+  file: string;
 }> = [
   {
-    name: "Savanna Brew Co",
-    description:
-      "Craft lager and ginger beer on tap for the night — cold crates, local grain, and a crew that knows when to pour.",
-    phone: "254712345670",
-    email: "hello@savannabrew.local",
+    name: "OMPO",
+    description: "It’s yours for the taking.",
+    file: "ompo.jpg",
   },
   {
-    name: "Coal & Citrus",
-    description:
-      "Pit-side citrus rubs and charcoal tools for the choma line. They keep the heat honest and the plates moving.",
-    phone: "254712345671",
-    email: "crew@coalandcitrus.local",
+    name: "Van Hygiene",
+    description: "Mobile hygiene for the night.",
+    file: "van-hygiene.jpg",
   },
   {
-    name: "Nairobi Sound Desk",
-    description:
-      "PA, wireless mics, and a tech who stays through last call so the DJ and the host never fight the room.",
-    phone: "254712345672",
-    email: "desk@nairobisound.local",
+    name: "CW",
+    description: "CW.",
+    file: "cw.jpg",
   },
   {
-    name: "Plate Run Logistics",
-    description:
-      "Night runners for ice, cups, and emergency stock between the kitchen, the bar, and the gate.",
-    phone: "254712345673",
-    email: "ops@platerun.local",
+    name: "Motif The Chef",
+    description: "Established 2017.",
+    file: "motif-the-chef.jpg",
   },
   {
-    name: "Kachumbari Farms",
-    description:
-      "Tomato, onion, and chilli deliveries timed to the dinner rush — fresh crates, no wilted garnish.",
-    phone: "254712345674",
-    email: "farm@kachumbari.local",
+    name: "Kihumo",
+    description: "Our heritage in every sip.",
+    file: "kihumo.jpg",
   },
   {
-    name: "Ember Print House",
-    description:
-      "Wristbands, menu boards, and stub stock printed the morning of — ink that survives sauce and sweat.",
-    phone: "254712345675",
-    email: "press@emberprint.local",
+    name: "Food With Walter",
+    description: "Food with Walter.",
+    file: "food-with-walter.jpg",
   },
   {
-    name: "Gate Light Co",
-    description:
-      "Warm path lighting and a soft wash on the brand mark so arrivals feel the night before they hear it.",
-    phone: "254712345676",
-    email: "light@gatelight.local",
+    name: "hck strt",
+    description: "hck strt.",
+    file: "hck-strt.jpg",
   },
   {
-    name: "Sukuma Secure",
-    description:
-      "Friendly bag check and queue flow at the entrance — calm presence, clear signals, zero drama.",
-    phone: "254712345677",
-    email: "gate@sukumasecure.local",
-  },
-  {
-    name: "Matatu Media",
-    description:
-      "Story clips and stills from the floor — the night’s heat packaged for the morning scroll.",
-    phone: "254712345678",
-    email: "studio@matatumedia.local",
-  },
-  {
-    name: "Walter’s Pantry",
-    description:
-      "Sponsored pantry staples and backup spice for the house kitchen when the rush empties the shelves.",
-    phone: "254712345679",
-    email: "pantry@foodwithwalter.local",
+    name: "Ankara Artifacts",
+    description: "Ankara Artifacts.",
+    file: "ankara-artifacts.png",
   },
 ];
 
-/** Idempotent demo partners for the guest showcase (by name). */
+function partnerLogoPath(file: string): string {
+  return path.join(root, "server/assets/partners", file);
+}
+
+/** Idempotent guest lineup: drop the demo brands, then upsert the real logos. */
 async function ensureEventPartners(pool: Pool): Promise<void> {
   const [eventRows] = await pool.query(
     "SELECT id FROM events ORDER BY created_at ASC LIMIT 1",
   );
   const eventId = (eventRows as Array<{ id: string }>)[0]?.id;
   if (!eventId) return;
+  if (RETIRED_EVENT_PARTNER_NAMES.length > 0) {
+    const placeholders = RETIRED_EVENT_PARTNER_NAMES.map(() => "?").join(", ");
+    await pool.query(
+      `DELETE FROM event_partners WHERE event_id = ? AND name IN (${placeholders})`,
+      [eventId, ...RETIRED_EVENT_PARTNER_NAMES],
+    );
+  }
   for (let i = 0; i < SEED_EVENT_PARTNERS.length; i += 1) {
     const p = SEED_EVENT_PARTNERS[i]!;
+    const logo = await readFile(partnerLogoPath(p.file));
     const [rows] = await pool.query(
       "SELECT id FROM event_partners WHERE event_id = ? AND name = ?",
       [eventId, p.name],
     );
-    if ((rows as Array<{ id: string }>).length > 0) continue;
+    const existing = (rows as Array<{ id: string }>)[0];
+    if (existing) {
+      await pool.query(
+        `UPDATE event_partners
+         SET description = ?, logo_mime = ?, logo_data = ?, sort_order = ?, updated_at = NOW()
+         WHERE id = ? AND event_id = ?`,
+        [p.description, "image/jpeg", logo, i, existing.id, eventId],
+      );
+      continue;
+    }
     await pool.query(
       `INSERT INTO event_partners
        (id, event_id, name, description, phone, email, logo_mime, logo_data, sort_order)
@@ -304,10 +302,10 @@ async function ensureEventPartners(pool: Pool): Promise<void> {
         eventId,
         p.name,
         p.description,
-        p.phone,
-        p.email,
-        "image/png",
-        SEED_PARTNER_LOGO_PNG,
+        "",
+        "",
+        "image/jpeg",
+        logo,
         i,
       ],
     );

@@ -35,7 +35,10 @@ function PartnerStall({
 }): ReactElement {
   const ref = useRef<HTMLElement>(null);
   const [logoFailed, setLogoFailed] = useState(false);
-  const phoneLabel = formatKenyanMsisdnDisplay(partner.phone);
+  const phoneLabel = partner.phone.trim()
+    ? formatKenyanMsisdnDisplay(partner.phone)
+    : "";
+  const email = partner.email.trim();
 
   useEffect(() => {
     const el = ref.current;
@@ -93,24 +96,30 @@ function PartnerStall({
         <p className="partners-stall-kicker">Crew</p>
         <h2>{partner.name}</h2>
         <p className="partners-stall-blurb">{partner.description}</p>
-        <div className="partners-stall-actions">
-          <a
-            className="partners-stall-action"
-            href={telHref(partner.phone)}
-            aria-label={`Call ${partner.name} at ${phoneLabel}`}
-          >
-            <span className="partners-stall-action-label">Call</span>
-            <span className="partners-stall-action-value">{phoneLabel}</span>
-          </a>
-          <a
-            className="partners-stall-action partners-stall-action--mail"
-            href={`mailto:${partner.email}`}
-            aria-label={`Email ${partner.name} at ${partner.email}`}
-          >
-            <span className="partners-stall-action-label">Email</span>
-            <span className="partners-stall-action-value">{partner.email}</span>
-          </a>
-        </div>
+        {phoneLabel || email ? (
+          <div className="partners-stall-actions">
+            {phoneLabel ? (
+              <a
+                className="partners-stall-action"
+                href={telHref(partner.phone)}
+                aria-label={`Call ${partner.name} at ${phoneLabel}`}
+              >
+                <span className="partners-stall-action-label">Call</span>
+                <span className="partners-stall-action-value">{phoneLabel}</span>
+              </a>
+            ) : null}
+            {email ? (
+              <a
+                className="partners-stall-action partners-stall-action--mail"
+                href={`mailto:${email}`}
+                aria-label={`Email ${partner.name} at ${email}`}
+              >
+                <span className="partners-stall-action-label">Email</span>
+                <span className="partners-stall-action-value">{email}</span>
+              </a>
+            ) : null}
+          </div>
+        ) : null}
       </div>
     </article>
   );

@@ -66,26 +66,26 @@ describe("migration files stay upgrade-safe", () => {
     expect(src).not.toMatch(/if \(id === ["']001_init["']\)/);
   });
 
-  it("seeds ten named event partners via ensureEventPartners", () => {
+  it("replaces the demo lineup with the real partner logos", () => {
     const src = readFileSync(join(repoRoot, "server/src/migrate.ts"), "utf8");
     expect(src).toMatch(/await ensureEventPartners\(pool\)/);
     expect(src).toMatch(/SEED_EVENT_PARTNERS/);
+    expect(src).toMatch(/DELETE FROM event_partners/);
     const names = [
-      "Savanna Brew Co",
-      "Coal & Citrus",
-      "Nairobi Sound Desk",
-      "Plate Run Logistics",
-      "Kachumbari Farms",
-      "Ember Print House",
-      "Gate Light Co",
-      "Sukuma Secure",
-      "Matatu Media",
-      "Walter’s Pantry",
+      "OMPO",
+      "Van Hygiene",
+      "CW",
+      "Motif The Chef",
+      "Kihumo",
+      "Food With Walter",
+      "hck strt",
+      "Ankara Artifacts",
     ];
     for (const name of names) {
       expect(src).toContain(name);
     }
-    expect(names).toHaveLength(10);
+    expect(names).toHaveLength(8);
+    expect(src).toContain("Savanna Brew Co");
   });
 
   it("adds account_kind in 002 before creating indexes on it", () => {
