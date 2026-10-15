@@ -1,5 +1,5 @@
 /** Fixed inventory pool: sum of ticket-type capacities must equal this. */
-export const TICKET_CAPACITY_POOL = 310;
+export const TICKET_CAPACITY_POOL = 280;
 
 export function poolDeltaCopy(sum: number, pool: number = TICKET_CAPACITY_POOL): string {
   const delta = sum - pool;

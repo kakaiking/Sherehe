@@ -8,7 +8,6 @@ import type { User } from "../App";
 import { needsAnotherTicketConfirm } from "../flow/anotherTicket";
 import { ConfirmModal } from "../flow/ConfirmModal";
 import { continuePath } from "../flow/continue";
-import { persistPayPhone } from "../flow/persistPayPhone";
 import { ChoiceList, StepForm } from "../flow/StepForm";
 import { TICKET_STEPS } from "../flow/ticketSteps";
 import { useAuthGate } from "../flow/useAuthGate";
@@ -19,6 +18,7 @@ import {
   extractKenyanNationalDigits,
   formatKenyanMsisdnDisplay,
   isCompleteKenyanNational,
+  kenyanPhonePayload,
 } from "../phone";
 import { QuantityField } from "../QuantityField";
 import { useSnackbar } from "../snackbar";
@@ -124,10 +124,13 @@ export function TicketsPage({
           return;
         }
       }
-      await persistPayPhone(phone, user?.phone, onAuth);
       const order = await api<{ orderId: string }>("/v1/orders/tickets", {
         method: "POST",
-        body: JSON.stringify({ code: selected.code, qty }),
+        body: JSON.stringify({
+          code: selected.code,
+          qty,
+          phone: kenyanPhonePayload(phone),
+        }),
       });
       markStale(PUBLIC_UID, queryKeys.tickets);
       if (user) markStale(user.id, queryKeys.accountOrders);

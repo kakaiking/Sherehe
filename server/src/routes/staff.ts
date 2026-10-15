@@ -492,7 +492,7 @@ export function staffRouter(pool: Pool, config: Config): Router {
   r.patch("/ticket-types/:code", async (req, res, next) => {
     try {
       const code = z
-        .enum(["early_bird", "rush", "regular", "vip", "viip", "group", "flash", "test"])
+        .enum(TICKET_CODES)
         .safeParse(req.params["code"]);
       const body = z
         .object({

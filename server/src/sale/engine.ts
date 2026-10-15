@@ -3,27 +3,23 @@ import { nairobiDateStr } from "./flashDates.js";
 export const ATTENDEE_TARGET = 200;
 export const HOLD_MS = 10 * 60 * 1000;
 /** Fixed inventory pool: sum of all ticket-type capacities must equal this. */
-export const TICKET_CAPACITY_POOL = 310;
+export const TICKET_CAPACITY_POOL = 280;
 
 export type TicketCode =
   | "early_bird"
   | "rush"
   | "regular"
   | "vip"
-  | "viip"
   | "group"
-  | "flash"
-  | "test";
+  | "flash";
 
 export const TICKET_CODES: readonly TicketCode[] = [
   "early_bird",
   "rush",
   "regular",
   "vip",
-  "viip",
   "group",
   "flash",
-  "test",
 ] as const;
 
 export type TicketType = {

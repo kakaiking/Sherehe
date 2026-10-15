@@ -19,21 +19,13 @@ import { productReceiptPdf } from "../tickets/receiptPdf.js";
 import { stubHolderCaption } from "../tickets/holder.js";
 import { log } from "../log.js";
 import type { TicketCode } from "../sale/engine.js";
-import { stkPhone, STK_PHONE_NEEDED } from "../phone.js";
+import { stkPhone } from "../phone.js";
 import { EVENT_STARTS_AT, EVENT_VENUE } from "../eventFacts.js";
 
 const TicketOrderBody = z.object({
-  code: z.enum([
-    "early_bird",
-    "rush",
-    "regular",
-    "vip",
-    "viip",
-    "group",
-    "flash",
-    "test",
-  ]),
+  code: z.enum(["early_bird", "rush", "regular", "vip", "group", "flash"]),
   qty: z.number().int().min(1).max(20),
+  phone: z.string().min(9).max(20),
 });
 
 function stkFailureDetail(err: unknown): string {
@@ -181,13 +173,13 @@ export function ordersRouter(
       }
       const user = req.user;
       if (!user) return;
-      const payPhone = stkPhone(user.phone);
+      const payPhone = stkPhone(parsed.data.phone);
       if (!payPhone) {
         res.status(422).json({
           type: "https://httpstatuses.com/422",
           title: "Unprocessable Entity",
           status: 422,
-          detail: STK_PHONE_NEEDED,
+          detail: "Use a Kenyan mobile number.",
         });
         return;
       }

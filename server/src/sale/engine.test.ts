@@ -44,13 +44,6 @@ const types: TicketType[] = [
     capacity: 20,
   },
   {
-    code: "viip",
-    name: "VIIP Ticket",
-    priceKsh: 5500,
-    seatsPerUnit: 1,
-    capacity: 10,
-  },
-  {
     code: "group",
     name: "Group Ticket (5 people)",
     priceKsh: 13000,
@@ -60,7 +53,7 @@ const types: TicketType[] = [
   {
     code: "flash",
     name: "Flash Sale",
-    priceKsh: 1500,
+    priceKsh: 2800,
     seatsPerUnit: 1,
     capacity: 50,
   },
@@ -86,11 +79,6 @@ function snap(over: Partial<SalesSnapshot> = {}): SalesSnapshot {
       },
       {
         ticketCode: "vip",
-        startsAt: new Date("2026-09-01T00:00:00Z"),
-        endsAt: null,
-      },
-      {
-        ticketCode: "viip",
         startsAt: new Date("2026-09-01T00:00:00Z"),
         endsAt: null,
       },
@@ -313,13 +301,11 @@ describe("assertCapacityPool", () => {
     rush: 50,
     regular: 25,
     vip: 20,
-    viip: 20,
     group: 10,
     flash: 50,
-    test: 10,
   };
 
-  it("accepts the fixed 310 allocation", () => {
+  it("accepts the fixed 280 allocation", () => {
     const r = assertCapacityPool(balanced);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.sum).toBe(TICKET_CAPACITY_POOL);
@@ -330,7 +316,7 @@ describe("assertCapacityPool", () => {
     expect(r.ok).toBe(false);
     if (!r.ok) {
       expect(r.reason).toBe("sum_mismatch");
-      expect(r.sum).toBe(311);
+      expect(r.sum).toBe(281);
     }
   });
 
@@ -347,10 +333,8 @@ describe("assertCapacityPool", () => {
       "rush",
       "regular",
       "vip",
-      "viip",
       "group",
       "flash",
-      "test",
     ]);
   });
 });

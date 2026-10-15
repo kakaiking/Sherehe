@@ -28,9 +28,8 @@ function balancedTicketTypes() {
     { code: "rush", name: "Rush Ticket", priceKsh: 2800, capacity: 50, sold: 0 },
     { code: "regular", name: "Regular Ticket", priceKsh: 3500, capacity: 25, sold: 0 },
     { code: "vip", name: "VIP Ticket", priceKsh: 4500, capacity: 20, sold: 0 },
-    { code: "viip", name: "VIIP Ticket", priceKsh: 5500, capacity: 20, sold: 0 },
     { code: "group", name: "Group Ticket (5 people)", priceKsh: 13000, capacity: 10, sold: 0 },
-    { code: "flash", name: "Flash Sale", priceKsh: 1500, capacity: 50, sold: 0 },
+    { code: "flash", name: "Flash Sale", priceKsh: 2800, capacity: 50, sold: 0 },
   ];
 }
 

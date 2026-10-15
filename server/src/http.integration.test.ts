@@ -203,7 +203,7 @@ describe.skipIf(!dbUrl)("HTTP integration", () => {
         "X-Sherehe-Portal": "user",
         Cookie: cookieHeader(userSid, csrf, "user"),
       },
-      body: JSON.stringify({ code: "early_bird", qty: 1 }),
+      body: JSON.stringify({ code: "early_bird", qty: 1, phone: "254712345678" }),
     });
     expect(res.status).toBe(201);
     const body = (await res.json()) as {
@@ -299,7 +299,7 @@ describe.skipIf(!dbUrl)("HTTP integration", () => {
         "X-Sherehe-Portal": "user",
         Cookie: cookieHeader(userSid, csrf, "user"),
       },
-      body: JSON.stringify({ code: "early_bird", qty: 1 }),
+      body: JSON.stringify({ code: "early_bird", qty: 1, phone: "254712345678" }),
     });
     expect(orderRes.status).toBe(201);
     const { orderId } = (await orderRes.json()) as { orderId: string };

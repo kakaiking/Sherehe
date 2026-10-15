@@ -7,8 +7,8 @@ import {
 
 describe("ticketPool", () => {
   it("reports short and over against the fixed pool", () => {
-    expect(poolDeltaCopy(290)).toBe("10 short.");
-    expect(poolDeltaCopy(310)).toBe("10 over.");
+    expect(poolDeltaCopy(270)).toBe("10 short.");
+    expect(poolDeltaCopy(290)).toBe("10 over.");
     expect(poolDeltaCopy(TICKET_CAPACITY_POOL)).toBe("Pool balanced.");
   });
 

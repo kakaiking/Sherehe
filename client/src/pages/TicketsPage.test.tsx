@@ -160,6 +160,7 @@ describe("TicketsPage stepped checkout", () => {
         expect(JSON.parse(String(init?.body))).toEqual({
           code: "early_bird",
           qty: 1,
+          phone: "+254700000000",
         });
         return Promise.resolve({
           ok: true,
@@ -283,13 +284,6 @@ describe("TicketsPage stepped checkout", () => {
           }),
         });
       }
-      if (url.includes("/v1/auth/phone") && method === "POST") {
-        expect(JSON.parse(String(init?.body))).toEqual({ phone: "+254712345678" });
-        return Promise.resolve({
-          ok: true,
-          json: async () => ({ ...noPhone, phone: "254712345678" }),
-        });
-      }
       if (url.includes("/v1/account/ticket-pass")) {
         return Promise.resolve({
           ok: true,
@@ -297,6 +291,11 @@ describe("TicketsPage stepped checkout", () => {
         });
       }
       if (url.includes("/v1/orders/tickets") && method === "POST") {
+        expect(JSON.parse(String(init?.body))).toEqual({
+          code: "early_bird",
+          qty: 1,
+          phone: "+254712345678",
+        });
         return Promise.resolve({
           ok: true,
           status: 201,
@@ -334,6 +333,6 @@ describe("TicketsPage stepped checkout", () => {
           String(c[0]).includes("/v1/auth/phone") &&
           (c[1] as RequestInit | undefined)?.method === "POST",
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 });

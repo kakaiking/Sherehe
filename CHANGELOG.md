@@ -4,6 +4,12 @@ All notable changes to Sherehe are documented in this file.
 
 ## Unreleased
 
+### Changed
+
+- Ticket checkout sends the M-Pesa prompt to the number typed on the pay step. That number is not saved on the Google account, so the same mobile can be used from more than one email.
+- **Test Ticket** (KSh 10) and **VIIP** are no longer on sale. Inventory pool is 280. Already issued stubs for those codes still scan.
+- Early Bird stays KSh 2,000. Flash Sale is KSh 2,800.
+
 ### Added
 
 - **Test Ticket** at KSh 10 (code `test`, 10 seats, on sale now) for a live Paystack prompt. Paystack refuses M-Pesa charges under KSh 10. Inventory pool is 310. The charge phone is sent as `+254…`.
