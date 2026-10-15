@@ -210,6 +210,7 @@ const RETIRED_EVENT_PARTNER_NAMES = [
   "Matatu Media",
   "Walter’s Pantry",
   "CW",
+  "hck strt",
 ];
 
 const SEED_EVENT_PARTNERS: Array<{
@@ -219,42 +220,50 @@ const SEED_EVENT_PARTNERS: Array<{
 }> = [
   {
     name: "OMPO",
-    description: "Cocktail supplier. It’s yours for the taking.",
+    description:
+      "OMPO is the cocktail supplier for the night. They keep the bar stocked and the glasses moving, and the mark says it plainly: it’s yours for the taking.",
     file: "ompo.jpg",
   },
   {
     name: "Van Hygiene",
-    description: "Cleaning company for the night.",
+    description:
+      "Van Hygiene is the cleaning company on the ground. They handle the wash-down so the floor, the stalls, and the service line stay presentable from doors open to pack-out.",
     file: "van-hygiene.jpg",
   },
   {
     name: "Chef With",
-    description: "Chef With, on the line with the house kitchen.",
+    description:
+      "Chef With is on the line with the house kitchen. The monogram is CW; the name is the crew cooking beside Food With Walter.",
     file: "cw.jpg",
   },
   {
     name: "Motif The Chef",
-    description: "Grill master. Established 2017.",
+    description:
+      "Motif The Chef is the grill master, established in 2017. They run the choma side of the night, from the first coals to the last plate off the fire.",
     file: "motif-the-chef.jpg",
   },
   {
     name: "Kihumo",
-    description: "Muratina. Our heritage in every sip.",
+    description:
+      "Kihumo pours muratina. The bottle in the tree is the whole idea: our heritage in every sip, served as part of the night rather than as a souvenir.",
     file: "kihumo.jpg",
   },
   {
     name: "Food With Walter",
-    description: "The house kitchen presenting the night.",
+    description:
+      "Food With Walter is the house kitchen presenting the night. The pan and the flame are the host mark: the menu, the service, and the room all sit under their name.",
     file: "food-with-walter.jpg",
   },
   {
-    name: "hck strt",
-    description: "hck strt.",
+    name: "Hackstreet Boys",
+    description:
+      "Hackstreet Boys are the technology behind the night. They built the website you are on and the ticket scanning at the gate, so the lineup, the passes, and the door all run on one system.",
     file: "hck-strt.jpg",
   },
   {
     name: "Ankara Artifacts",
-    description: "Decor partner for the room.",
+    description:
+      "Ankara Artifacts are the decor partners. They dress the room so the night looks like the gathering it is, from the first cloth to the last corner of the floor.",
     file: "ankara-artifacts.png",
   },
 ];

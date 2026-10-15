@@ -78,7 +78,7 @@ describe("migration files stay upgrade-safe", () => {
       "Motif The Chef",
       "Kihumo",
       "Food With Walter",
-      "hck strt",
+      "Hackstreet Boys",
       "Ankara Artifacts",
     ];
     for (const name of names) {
