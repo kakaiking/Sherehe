@@ -41,7 +41,7 @@ npm install
 npm run migrate -w server
 ```
 
-Staff bootstrap uses `STAFF_EMAIL`, `STAFF_PASSWORD`, and `STAFF_PHONE` from `.env` on first seed. Public sign-in is Google only. **Continue with Google** on `/admin` creates or reuses a staff row for that Google account, even when the same email already has a guest row. Admin is reached only by opening `/admin` directly (no Admin shortcut from Guest You or other portals). Staff still need an admin session cookie for ops APIs. `STAFF_EMAIL` only seeds a staff row on migrate; it does not lock the gate to one address.
+Staff bootstrap uses `STAFF_EMAIL`, `STAFF_PASSWORD`, and `STAFF_PHONE` from `.env` on first seed. Public sign-in is Google only. **Continue with Google** on `/admin` creates or reuses a staff row only when that Google email is one of the two addresses in `STAFF_EMAILS`. Any other address is refused and no admin session is issued. The same check runs on every staff API call, so removing an address from the list cuts off an existing session. Admin is reached only by opening `/admin` directly (no Admin shortcut from Guest You or other portals). A guest row for the same email is a separate account. Production refuses to boot unless `STAFF_EMAILS` is exactly two distinct addresses.
 
 ## Usage
 
@@ -83,7 +83,8 @@ Buy a ticket while signed in: pick, quantity, **Receive Prompt**, then download 
 | `CLIENT_ORIGIN` | CORS allowlist (Vite origin locally; the Vercel URL in production if unset) |
 | `COOKIE_SECURE` | Set `true` behind HTTPS (defaults on when `NODE_ENV=production` or `VERCEL` is set) |
 | `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` | Upstash Redis (Vercel also accepts `KV_REST_API_*`). Required in production for rate limits and migrate locks |
-| `STAFF_*` | Optional first staff user on seed; `STAFF_EMAIL` should match the Google account used to sign in |
+| `STAFF_EMAILS` | Exactly two admin Google addresses, comma-separated. Required in production. Empty outside production means admin sign-in is closed |
+| `STAFF_*` | Optional first staff user on seed; `STAFF_EMAIL` should be one of `STAFF_EMAILS` |
 | `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Google Cloud OAuth web client (required for sign-in) |
 | `GOOGLE_REDIRECT_URI` | Optional override; default `{CLIENT_ORIGIN}/v1/auth/google/callback` |
 | `PAYMENT_PROVIDER` | `mock` (default), `paystack`, or `daraja`. Unset + `MPESA_MODE=live` means Daraja |
@@ -283,6 +284,6 @@ erDiagram
 - Load and mutation testing are deferred.
 - Compose runs Postgres only; the Node apps run on the host.
 - No user-facing appearance control (product requirement: follow system light/dark only; both palettes are the barbecue theme).
-- Password registration and login APIs return 410; sign-in is Google only. Guest and admin are separate account ids, so one Google email can sign in on both gates.
+- Password registration and login APIs return 410; sign-in is Google only. Guest and admin are separate account ids, so one allowlisted Google email can sign in on both gates. Other Google accounts cannot open admin.
 
 <sub>[↑ Back to contents](#contents)</sub>

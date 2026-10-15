@@ -16,6 +16,7 @@ describe("parseGoogleLoginError", () => {
     expect(parseGoogleLoginError("google_network")).toBe("google_network");
     expect(parseGoogleLoginError("google_session")).toBe("google_session");
     expect(parseGoogleLoginError("google_portal")).toBe("google_portal");
+    expect(parseGoogleLoginError("google_staff")).toBe("google_staff");
     expect(parseGoogleLoginError("google_clock")).toBe("google_clock");
   });
 
@@ -38,6 +39,7 @@ describe("googleLoginMessage", () => {
     expect(googleLoginMessage("google_network")).toMatch(/VPN|network/i);
     expect(googleLoginMessage("google_session")).toMatch(/cookies/i);
     expect(googleLoginMessage("google_portal")).toMatch(/different portal/i);
+    expect(googleLoginMessage("google_staff")).toMatch(/not an admin/i);
     expect(googleLoginMessage("google_clock")).toMatch(/clock/i);
     expect(googleLoginMessage("google")).toMatch(/did not complete/i);
   });

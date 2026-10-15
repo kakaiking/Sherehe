@@ -8,6 +8,7 @@ export const GOOGLE_LOGIN_ERRORS = [
   "google_network",
   "google_session",
   "google_portal",
+  "google_staff",
   "google_clock",
 ] as const;
 

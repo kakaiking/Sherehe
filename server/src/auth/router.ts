@@ -26,6 +26,7 @@ import {
   type SessionKind,
   type UserRole,
 } from "./portal.js";
+import { isStaffEmail } from "./staffEmail.js";
 import {
   ACCOUNT_PROFILE_SQL,
   accountTable,
@@ -88,7 +89,7 @@ function sessionRole(
 
 function googleJsonStatus(code: GoogleLoginError): number {
   if (code === "google_conflict") return 409;
-  if (code === "google_portal") return 403;
+  if (code === "google_portal" || code === "google_staff") return 403;
   if (code === "google_network") return 502;
   if (code === "google_off") return 503;
   return 400;
@@ -190,6 +191,13 @@ export function authRouter(pool: Pool, config: Config): Router {
         parsed.data.verifier,
       );
       const claims = await verifyGoogleIdToken(idToken, oauth.clientId, fetch);
+      if (
+        sessionKind === "admin" &&
+        !isStaffEmail(claims.email, config.STAFF_EMAILS)
+      ) {
+        fail("google_staff");
+        return;
+      }
       const portalRole: UserRole =
         sessionKind === "admin" ? "staff" : intendedRole;
       const userRoleForInsert: UserRole =

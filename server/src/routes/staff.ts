@@ -71,7 +71,7 @@ const EventPartnerPatchBody = z
 
 export function staffRouter(pool: Pool, config: Config): Router {
   const r = Router();
-  r.use(requireStaff);
+  r.use(requireStaff(config.STAFF_EMAILS));
 
   r.get("/overview", async (_req, res, next) => {
     try {

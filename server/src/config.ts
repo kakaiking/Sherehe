@@ -39,6 +39,8 @@ const EnvSchema = z.object({
   COOKIE_SECURE: z.boolean(),
   UPSTASH_REDIS_REST_URL: z.string().url().max(500).optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().min(8).max(500).optional(),
+  /** Exactly two admin Google addresses in production. Empty outside production means nobody can open admin. */
+  STAFF_EMAILS: z.array(z.string().email().max(255)).max(2),
   STAFF_EMAIL: z.string().email().max(255).optional(),
   STAFF_PASSWORD: z.string().min(10).max(200).optional(),
   STAFF_PHONE: z.string().min(10).max(16).optional(),
@@ -67,7 +69,21 @@ const EnvSchema = z.object({
   MPESA_CALLBACK_URL: z.string().url().optional(),
   MPESA_ENV: z.enum(["sandbox", "production"]).default("sandbox"),
 }).superRefine((data, ctx) => {
+  if (new Set(data.STAFF_EMAILS).size !== data.STAFF_EMAILS.length) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["STAFF_EMAILS"],
+      message: "admin emails must be distinct",
+    });
+  }
   if (data.NODE_ENV === "production") {
+    if (data.STAFF_EMAILS.length !== 2) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["STAFF_EMAILS"],
+        message: "production requires exactly two distinct admin emails",
+      });
+    }
     if (!data.UPSTASH_REDIS_REST_URL || !data.UPSTASH_REDIS_REST_TOKEN) {
       ctx.addIssue({
         code: "custom",
@@ -123,6 +139,14 @@ const EnvSchema = z.object({
 
 export type Config = z.infer<typeof EnvSchema>;
 
+/** Comma-separated admin emails. Blank entries and duplicates are rejected by the schema. */
+export function parseStaffEmails(raw: string | undefined): string[] {
+  const trimmed = raw?.trim() ?? "";
+  if (!trimmed) return [];
+  const emails = trimmed.split(",").map((part) => part.trim().toLowerCase());
+  return emails;
+}
+
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   const cookieRaw = env["COOKIE_SECURE"]?.trim();
   const cookieSecure =
@@ -146,6 +170,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     MPESA_ALLOW_MOCK: allowMockRaw === "true",
     PAYMENT_PROVIDER: paymentProvider,
     PAYSTACK_SECRET_KEY: optionalSecret.parse(env["PAYSTACK_SECRET_KEY"]),
+    STAFF_EMAILS: parseStaffEmails(env["STAFF_EMAILS"]),
     UPSTASH_REDIS_REST_URL: upstashUrl(env),
     UPSTASH_REDIS_REST_TOKEN: upstashToken(env),
   });

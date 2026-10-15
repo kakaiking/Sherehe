@@ -8,6 +8,7 @@ import {
   parseSessionKind,
   type SessionKind,
 } from "./portal.js";
+import { isStaffEmail } from "./staffEmail.js";
 
 /** Legacy single-cookie name; cleared on create/destroy so old tabs cannot fight. */
 export const LEGACY_SESSION_COOKIE = "sherehe_sid";
@@ -219,15 +220,23 @@ export function requireUser(req: Request, res: Response, next: NextFunction): vo
   next();
 }
 
-export function requireStaff(req: Request, res: Response, next: NextFunction): void {
-  if (!req.user || req.user.role !== "staff" || req.portal !== "admin") {
-    res.status(403).json({
-      type: "https://httpstatuses.com/403",
-      title: "Forbidden",
-      status: 403,
-      detail: "Staff access required.",
-    });
-    return;
-  }
-  next();
+export function requireStaff(staffEmails: readonly string[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const email = req.user?.email ?? "";
+    if (
+      !req.user ||
+      req.user.role !== "staff" ||
+      req.portal !== "admin" ||
+      !isStaffEmail(email, staffEmails)
+    ) {
+      res.status(403).json({
+        type: "https://httpstatuses.com/403",
+        title: "Forbidden",
+        status: 403,
+        detail: "Staff access required.",
+      });
+      return;
+    }
+    next();
+  };
 }

@@ -1,14 +1,17 @@
 import { describe, expect, it } from "vitest";
 import { isStaffEmail } from "./staffEmail.js";
 
+const allow = ["one.admin@example.com", "two.admin@example.com"];
+
 describe("isStaffEmail", () => {
-  it("matches case-insensitively when STAFF_EMAIL is set", () => {
-    expect(isStaffEmail("kakaiphil@gmail.com", "kakaiphil@gmail.com")).toBe(true);
-    expect(isStaffEmail("Kakaiphil@Gmail.com", "kakaiphil@gmail.com")).toBe(true);
+  it("matches either configured address, ignoring case and surrounding space", () => {
+    expect(isStaffEmail("one.admin@example.com", allow)).toBe(true);
+    expect(isStaffEmail("  TWO.ADMIN@example.com ", allow)).toBe(true);
   });
 
-  it("rejects other emails", () => {
-    expect(isStaffEmail("other@gmail.com", "kakaiphil@gmail.com")).toBe(false);
-    expect(isStaffEmail("kakaiphil@gmail.com", undefined)).toBe(false);
+  it("rejects every other address and an empty allowlist", () => {
+    expect(isStaffEmail("other@example.com", allow)).toBe(false);
+    expect(isStaffEmail("one.admin@example.com", [])).toBe(false);
+    expect(isStaffEmail("", allow)).toBe(false);
   });
 });

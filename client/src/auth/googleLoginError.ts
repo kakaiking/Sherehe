@@ -8,6 +8,7 @@ export const GOOGLE_LOGIN_ERRORS = [
   "google_network",
   "google_session",
   "google_portal",
+  "google_staff",
   "google_clock",
 ] as const;
 
@@ -25,6 +26,7 @@ const MESSAGES: Record<GoogleLoginError, string> = {
     "Signed in, but this browser did not keep the session. Allow cookies and try again.",
   google_portal:
     "That Google account already belongs to a different portal. Pick the gate you signed up on.",
+  google_staff: "This Google account is not an admin.",
   google_clock:
     "This device's clock is wrong. Set the correct date and time, then try again.",
 };

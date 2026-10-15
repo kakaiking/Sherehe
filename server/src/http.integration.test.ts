@@ -31,6 +31,7 @@ function testConfig(overrides: Partial<Config> = {}): Config {
     GOOGLE_REDIRECT_URI: undefined,
     UPSTASH_REDIS_REST_URL: undefined,
     UPSTASH_REDIS_REST_TOKEN: undefined,
+    STAFF_EMAILS: [],
     STAFF_EMAIL: undefined,
     STAFF_PASSWORD: undefined,
     STAFF_PHONE: undefined,
