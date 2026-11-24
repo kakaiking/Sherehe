@@ -20,7 +20,7 @@ describe("HomePage", () => {
               name: "Sherehe",
               presenter: "Food With Walter Kenya",
               venue: "Fused Lens Studios, Kirigiti, Kiambu",
-              startsAt: "2026-11-28T13:00:00.000Z",
+              startsAt: "2026-12-13T13:00:00.000Z",
             }),
           });
         }
@@ -47,7 +47,7 @@ describe("HomePage", () => {
     expect(container.textContent).toMatch(/Fused Lens/);
     expect(container.textContent).toMatch(/Kirigiti/);
     expect(container.textContent).toMatch(/From 12 Noon till Late/);
-    expect(container.textContent).toMatch(/28/);
+    expect(container.textContent).toMatch(/13/);
     const results = await axe.run(container);
     const serious = results.violations.filter(
       (v) => v.impact === "serious" || v.impact === "critical",

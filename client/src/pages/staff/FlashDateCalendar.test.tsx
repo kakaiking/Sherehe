@@ -28,12 +28,13 @@ describe("FlashDateCalendar", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Next month" }));
     fireEvent.click(screen.getByRole("button", { name: "Next month" }));
-    // November 2026
+    fireEvent.click(screen.getByRole("button", { name: "Next month" }));
+    // December 2026
     expect(
-      screen.getByRole("gridcell", { name: /2026-11-28/ }),
+      screen.getByRole("gridcell", { name: /2026-12-13/ }),
     ).toHaveProperty("disabled", false);
     expect(
-      screen.getByRole("gridcell", { name: /2026-11-29/ }),
+      screen.getByRole("gridcell", { name: /2026-12-14/ }),
     ).toHaveProperty("disabled", true);
   });
 

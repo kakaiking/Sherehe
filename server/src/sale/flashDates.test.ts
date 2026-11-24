@@ -42,10 +42,10 @@ describe("flashDates", () => {
 
   it("allows today through the event night only", () => {
     const now = new Date("2026-09-22T12:00:00+03:00");
-    expect(flashDateMax()).toBe("2026-11-28");
+    expect(flashDateMax()).toBe("2026-12-13");
     expect(isFlashDateAllowed("2026-09-21", now)).toBe(false);
     expect(isFlashDateAllowed("2026-09-22", now)).toBe(true);
-    expect(isFlashDateAllowed("2026-11-28", now)).toBe(true);
-    expect(isFlashDateAllowed("2026-11-29", now)).toBe(false);
+    expect(isFlashDateAllowed("2026-12-13", now)).toBe(true);
+    expect(isFlashDateAllowed("2026-12-14", now)).toBe(false);
   });
 });

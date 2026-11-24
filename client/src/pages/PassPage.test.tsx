@@ -27,7 +27,7 @@ describe("PassPage", () => {
               holderName: "Amina Otieno",
               eventName: "Sherehe",
               venue: "Fused Lens",
-              startsAt: "2026-11-28T13:00:00.000Z",
+              startsAt: "2026-12-13T13:00:00.000Z",
               usedAt: null,
               readyForGate: true,
               headline: "Valid pass",

@@ -14,7 +14,7 @@ function basePass(
     usedAt: null,
     eventName: "Sherehe",
     venue: "Fused Lens",
-    startsAt: "2026-11-28T13:00:00.000Z",
+    startsAt: "2026-12-13T13:00:00.000Z",
     ...overrides,
   };
 }
@@ -31,7 +31,7 @@ describe("passPublicView", () => {
     const view = passPublicView(
       basePass({
         status: "used",
-        usedAt: "2026-11-28T18:00:00.000Z",
+        usedAt: "2026-12-13T18:00:00.000Z",
       }),
     );
     expect(view.readyForGate).toBe(false);

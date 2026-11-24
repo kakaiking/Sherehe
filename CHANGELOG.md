@@ -31,7 +31,7 @@ All notable changes to Sherehe are documented in this file.
 - Admin **Attendees** desk pages buyers **10 at a time** (prev/next + range label), matching scan history.
 - Admin desk headers show only the title (no live clock or subtitle lede under Dashboard / Attendees / Tickets / Partners / Gate scan).
 - Admin dashboard **Scan** card is icon above **Scan** only (no Gate label or “Check in tickets”).
-- Admin **Set flash sale** modal uses a multi-select calendar (tap days to toggle). Each selected day is a flash window from midnight to midnight Nairobi. Close is a red X; unsaved edits prompt Save / Discard. Only **today through 28 Nov 2026** can be set. `POST /v1/staff/flash` takes `{ dates: string[] }`.
+- Admin **Set flash sale** modal uses a multi-select calendar (tap days to toggle). Each selected day is a flash window from midnight to midnight Nairobi. Close is a red X; unsaved edits prompt Save / Discard. Only **today through 13 Dec 2026** can be set. `POST /v1/staff/flash` takes `{ dates: string[] }`.
 
 ### Added
 
@@ -94,7 +94,7 @@ All notable changes to Sherehe are documented in this file.
 ### Changed
 
 - Bottom dock is **Home, Tickets, Shop, You** on every portal. Desktop header matches. Staff is on You.
-- The night is **Saturday 28 November 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Catalog, vendor set-up times, ticket stubs (on-screen and PDF), and the header calendar strip all read from that fact. Guest UI shows the date, not a doors clock.
+- The night is **Sunday 13 December 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Catalog, vendor set-up times, ticket stubs (on-screen and PDF), and the header calendar strip all read from that fact. Guest UI shows the date, not a doors clock.
 
 ### Added
 

@@ -7,10 +7,10 @@ import {
 } from "./eventLine.js";
 
 describe("eventLine", () => {
-  it("formats Saturday 28 Nov 2026 in Nairobi", () => {
+  it("formats Sunday 13 Dec 2026 in Nairobi", () => {
     const text = formatPdfEventDay(EVENT_STARTS_AT);
-    expect(text).toMatch(/28/);
-    expect(text).toMatch(/Nov/i);
+    expect(text).toMatch(/13/);
+    expect(text).toMatch(/Dec/i);
     expect(text).toMatch(/2026/);
   });
 

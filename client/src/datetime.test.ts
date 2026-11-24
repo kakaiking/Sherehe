@@ -82,12 +82,12 @@ describe("flashStatus", () => {
 });
 
 describe("event night", () => {
-  const starts = "2026-11-28T13:00:00.000Z";
+  const starts = "2026-12-13T13:00:00.000Z";
 
   it("renders the Nairobi calendar date without a clock", () => {
     const text = formatEventDay(starts);
-    expect(text).toMatch(/28/);
-    expect(text).toMatch(/Nov/i);
+    expect(text).toMatch(/13/);
+    expect(text).toMatch(/Dec/i);
     expect(text).toMatch(/2026/);
     expect(text).not.toMatch(/\d:\d{2}/);
   });
@@ -103,8 +103,8 @@ describe("event night", () => {
 
   it("exposes calendar block parts", () => {
     const parts = eventDayParts(starts);
-    expect(parts?.day).toBe("28");
+    expect(parts?.day).toBe("13");
     expect(parts?.year).toBe("2026");
-    expect(parts?.month).toMatch(/Nov/i);
+    expect(parts?.month).toMatch(/Dec/i);
   });
 });

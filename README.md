@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-12 05:46 AM CDT
 
-Food With Walter Kenya presents **Sherehe** — **Saturday 28 November 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Event ticketing only.
+Food With Walter Kenya presents **Sherehe** — **Sunday 13 December 2026** at **Fused Lens Studios, Kirigiti, Kiambu**. Event ticketing only.
 
 ## Contents
 

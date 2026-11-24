@@ -67,7 +67,7 @@ describe("OrderPage ticket stub", () => {
     expect(screen.getByText("Early Bird")).toBeTruthy();
     expect(screen.getByText("the pit is open")).toBeTruthy();
     expect(screen.getByText("Walter Kamau")).toBeTruthy();
-    expect(screen.getByText(/Sat,\s*28\s*Nov\s*2026/i)).toBeTruthy();
+    expect(screen.getByText(/Sun,\s*13\s*Dec\s*2026/i)).toBeTruthy();
     expect(screen.getByText(/Fused Lens Studios/i)).toBeTruthy();
     expect(screen.getByText(/Kirigiti,\s*Kiambu/i)).toBeTruthy();
     expect(screen.getByText("Gate scan")).toBeTruthy();

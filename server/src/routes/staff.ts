@@ -333,7 +333,7 @@ export function staffRouter(pool: Pool, config: Config): Router {
           title: "Unprocessable Entity",
           status: 422,
           detail:
-            "Flash days must be today through the event night (28 Nov 2026).",
+            "Flash days must be today through the event night (13 Dec 2026).",
         });
         return;
       }

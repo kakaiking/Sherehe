@@ -37,7 +37,7 @@ function ymKey(year: number, month: number): number {
   return year * 12 + month;
 }
 
-/** Today through event night (Nairobi). Yesterday and earlier, and days after 28 Nov, are out. */
+/** Today through event night (Nairobi). Yesterday and earlier, and days after 13 Dec, are out. */
 export function isFlashDateSelectable(
   dateStr: string,
   today: string,
@@ -81,7 +81,7 @@ function buildCells(
 /**
  * Multi-select month grid. Click toggles a day — no day-detail panel.
  * Selected days are flash-sale dates (00:00–23:59 Nairobi).
- * Only today through the event night (28 Nov 2026) can be newly selected.
+ * Only today through the event night (13 Dec 2026) can be newly selected.
  */
 export function FlashDateCalendar({
   selectedDates,
